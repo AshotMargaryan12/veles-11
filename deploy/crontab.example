@@ -1,0 +1,12 @@
+# Альтернатива systemd-таймеру: обычный cron.
+# Устанавливается через `crontab -e` от пользователя tghunter.
+#
+# ВАЖНО: только одна запись — параллельные прогоны запрещены (раздел 9 ТЗ).
+# flock не даёт второму прогону стартовать, если первый ещё работает.
+
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+
+# Ежедневный прогон всех активных пресетов + пересканирование старых метрик
+0 6 * * * cd /opt/tghunter && /usr/bin/flock -n /tmp/tghunter.lock \
+  .venv/bin/python -m tghunter run --all --rescan >> /var/log/tghunter/run.log 2>&1

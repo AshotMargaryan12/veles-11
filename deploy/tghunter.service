@@ -1,0 +1,29 @@
+[Unit]
+Description=Telegram channel hunter — ежедневный прогон всех активных пресетов
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=tghunter
+Group=tghunter
+WorkingDirectory=/opt/tghunter
+EnvironmentFile=/opt/tghunter/.env
+ExecStart=/opt/tghunter/.venv/bin/python -m tghunter run --all --rescan
+
+# Один процесс, без параллельных сессий — безопасность аккаунта (раздел 9 ТЗ)
+# systemd сам не запустит второй экземпляр oneshot-юнита, пока работает первый.
+TimeoutStartSec=6h
+
+# Базовая изоляция
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/opt/tghunter
+
+StandardOutput=append:/var/log/tghunter/run.log
+StandardError=append:/var/log/tghunter/run.log
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,157 @@
+# Пресеты стримов хантинга. Редактируется без правки кода.
+#
+# defaults  — базовые пороги фильтров, наследуются каждым пресетом
+# streams   — список пресетов; любое поле из defaults можно переопределить
+#
+# Поля пресета:
+#   enabled            — участвует ли в `run --all` (cron-режим)
+#   keywords           — словарь ключевых слов для глобального поиска
+#   languages          — допустимые языки: ru / uk / en / turkic / other
+#   min_subscribers    — нижняя граница подписчиков
+#   max_subscribers    — верхняя граница подписчиков
+#   methods            — какие методы поиска включены для пресета
+#   seed_file          — файл эталонных каналов для метода similar
+#   addlist_file       — файл ссылок t.me/addlist/* для метода folders
+#   mode               — normal | longlist
+#                        longlist: жёсткие фильтры живости/ER не применяются,
+#                        канал попадает в выгрузку для ручного разбора
+#   separate_export    — выгружать в отдельный файл (не смешивать с основным)
+#   extra_blacklist    — дополнительные стоп-маркеры поверх blacklist_markers.txt
+#   mention_depth      — глубина обхода графа упоминаний (1 = только от seed)
+#   max_new_channels   — лимит новых каналов за прогон пресета
+
+defaults:
+  min_subscribers: 1000
+  max_subscribers: 100000
+  min_er: 3.0
+  min_avg_reactions: 5.0
+  max_days_since_post: 14
+  min_posts_30d: 4
+  languages: [ru]
+  methods: [keywords, similar, mentions]
+  seed_file: seed_channels.txt
+  addlist_file: addlists.txt
+  mention_depth: 1
+  mention_posts_per_channel: 50
+  keyword_results_per_query: 30
+  mode: normal
+  separate_export: false
+  max_new_channels: 200
+
+streams:
+  - name: neighbors
+    enabled: true
+    description: "Lookalike от наших топ-партнёров. Главный метод — нативные рекомендации Telegram."
+    keywords: []
+    methods: [similar, mentions]
+    min_subscribers: 3000
+    max_subscribers: 50000
+    languages: [ru, uk]
+
+  - name: crypto_core
+    enabled: true
+    description: "Ядро крипты: трейдинг, фьючерсы, альткоины."
+    methods: [keywords, similar, mentions]
+    min_subscribers: 3000
+    max_subscribers: 50000
+    languages: [ru, uk]
+    keywords:
+      - трейдинг
+      - криптовалюта
+      - крипта
+      - фьючерсы
+      - скальпинг
+      - альткоины
+      - биржа
+      - криптотрейдинг
+      - биткоин
+      - bybit
+      - binance
+
+  - name: invest_tradfi
+    enabled: true
+    description: "Фондовый рынок и классические инвестиции."
+    methods: [keywords, similar]
+    min_subscribers: 3000
+    max_subscribers: 50000
+    languages: [ru]
+    keywords:
+      - инвестиции
+      - акции
+      - дивиденды
+      - фондовый рынок
+      - портфель
+      - ИИС
+      - пассивный доход
+      - облигации
+      - инвестор
+
+  - name: fin_literacy
+    enabled: true
+    description: "Финансовая грамотность и личные финансы — нано-конвейер."
+    methods: [keywords, similar]
+    min_subscribers: 1000
+    max_subscribers: 15000
+    languages: [ru]
+    keywords:
+      - финансовая грамотность
+      - личные финансы
+      - накопления
+      - финансы просто
+      - как копить
+      - семейный бюджет
+      - финансы для начинающих
+
+  - name: signals
+    enabled: true
+    description: "Сигнальные каналы. Усиленный стоп-фильтр на памперов, выгрузка отдельным файлом, ручной разбор."
+    methods: [keywords, similar]
+    min_subscribers: 1000
+    max_subscribers: 50000
+    languages: [ru, uk, en]
+    separate_export: true
+    keywords:
+      - сигналы
+      - копирование сделок
+      - автоследование
+      - торговые сигналы
+      - копитрейдинг
+    extra_blacklist:
+      - гарант профит
+      - профит 100%
+      - точность 95%
+      - точность 99%
+      - безубыточная стратегия
+      - удвоим депозит
+      - удвоение депозита
+      - разгон депозита
+      - инсайд
+
+  - name: regional
+    enabled: true
+    description: "Казахстан / Узбекистан / Азербайджан. Режим только лонглист — ручной разбор."
+    methods: [keywords, similar]
+    min_subscribers: 1000
+    max_subscribers: 100000
+    languages: [turkic, ru, en]
+    mode: longlist
+    separate_export: true
+    keywords:
+      # kk
+      - инвестиция қазақша
+      - криптовалюта қазақша
+      - қаржы сауаттылығы
+      - трейдинг қазақша
+      - ақша табу
+      # uz
+      - investitsiya
+      - kripto valyuta
+      - moliyaviy savodxonlik
+      - treyding
+      - pul ishlash
+      # az
+      - investisiya
+      - kriptovalyuta
+      - maliyyə savadlılığı
+      - treydinq
+      - pul qazanmaq

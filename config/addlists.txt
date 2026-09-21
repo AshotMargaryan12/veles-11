@@ -1,0 +1,5 @@
+# Ссылки на папки-подборки Telegram для метода `folders`.
+# Одна строка — одна ссылка вида https://t.me/addlist/XXXXXXXX
+# Строки с # — комментарии.
+
+# https://t.me/addlist/AAAAAAAAAAAAAAAA

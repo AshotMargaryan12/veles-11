@@ -1,0 +1,13 @@
+[Unit]
+Description=Ежедневный запуск хантинга Telegram-каналов
+
+[Timer]
+# Каждый день в 06:00 по времени сервера
+OnCalendar=*-*-* 06:00:00
+# Случайная задержка до 30 минут — чтобы запросы не шли строго по расписанию
+RandomizedDelaySec=1800
+Persistent=true
+Unit=tghunter.service
+
+[Install]
+WantedBy=timers.target
