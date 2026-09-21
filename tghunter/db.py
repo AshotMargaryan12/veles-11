@@ -359,6 +359,19 @@ class Database:
         sql.append("ORDER BY score DESC, subscribers DESC")
         return list(self.conn.execute(" ".join(sql), params).fetchall())
 
+    def rows_by_ids(self, channel_ids: Iterable[int]) -> list[dict[str, Any]]:
+        """Каналы по списку id, по убыванию score. Для выдачи свободного поиска."""
+        ids = list(dict.fromkeys(channel_ids))
+        if not ids:
+            return []
+        placeholders = ", ".join("?" for _ in ids)
+        rows = self.conn.execute(
+            f"""SELECT * FROM channels WHERE channel_id IN ({placeholders})
+                ORDER BY score DESC, subscribers DESC""",
+            ids,
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def stale_channels(self, older_than_days: int = 30, limit: int = 200) -> list[sqlite3.Row]:
         """Каналы, у которых метрики старше N дней — для фонового пересканирования."""
         cutoff = (datetime.now(timezone.utc) - timedelta(days=older_than_days)).isoformat()

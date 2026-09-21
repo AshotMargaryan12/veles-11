@@ -26,6 +26,7 @@ from .exporters.csv_export import export_csv
 from .exporters.notify import build_summary, send_summary
 from .pipeline import Pipeline, export_dir_for_today
 from .ratelimit import RateLimiter
+from .search import build_adhoc_stream, format_table, run_search, split_queries
 
 log = logging.getLogger("tghunter")
 
@@ -64,6 +65,28 @@ def build_parser() -> argparse.ArgumentParser:
                      help="после прогона обновить метрики каналов старше 30 дней")
     run.add_argument("--max-channels", type=int, default=None,
                      help="переопределить MAX_CHANNELS_PER_RUN")
+
+    search = sub.add_parser(
+        "search", help="свободный поиск по Telegram: ввели запрос — получили каналы"
+    )
+    search.add_argument("query", nargs="*",
+                        help="запрос; несколько через запятую. Без аргумента — интерактивный режим")
+    search.add_argument("--limit", type=int, default=30,
+                        help="сколько каналов брать из выдачи на один запрос")
+    search.add_argument("--expand", action="store_true",
+                        help="расширить выдачу рекомендациями Telegram к найденным каналам")
+    search.add_argument("--min-subs", type=int, default=1000, help="нижняя граница подписчиков")
+    search.add_argument("--max-subs", type=int, default=1000000, help="верхняя граница подписчиков")
+    search.add_argument("--lang", default=None,
+                        help="языки через запятую (ru,uk,en,turkic). По умолчанию любые")
+    search.add_argument("--loose", action="store_true",
+                        help="не отсекать по ER и живости — показать всё, что нашлось")
+    search.add_argument("--max-channels", type=int, default=None,
+                        help="лимит новых каналов за поиск")
+    search.add_argument("--top", type=int, default=40, help="сколько строк печатать в терминал")
+    search.add_argument("--out", default=None, help="путь к CSV (по умолчанию в exports/)")
+    search.add_argument("--no-export", dest="export", action="store_false", default=True,
+                        help="не сохранять CSV")
 
     enrich = sub.add_parser("enrich", help="обогатить метриками список каналов")
     enrich.add_argument("file", help="CSV или txt со списком username/ссылок")
@@ -260,6 +283,81 @@ def cmd_run(args: argparse.Namespace) -> int:
     return 2 if aborted else 0
 
 
+def cmd_search(args: argparse.Namespace) -> int:
+    """Свободный поиск: запрос из аргумента или интерактивно."""
+    settings = _settings(args)
+    queries = split_queries(" ".join(args.query)) if args.query else []
+
+    if not queries:
+        try:
+            typed = input("Запрос (несколько через запятую): ").strip()
+        except EOFError:
+            typed = ""
+        queries = split_queries(typed)
+    if not queries:
+        print("Пустой запрос — нечего искать", file=sys.stderr)
+        return 1
+
+    languages = [l.strip() for l in args.lang.split(",") if l.strip()] if args.lang else []
+    stream = build_adhoc_stream(
+        queries,
+        min_subs=args.min_subs,
+        max_subs=args.max_subs,
+        languages=languages,
+        loose=args.loose,
+    )
+
+    limiter = _limiter(settings)
+    db = Database(settings.db_path)
+    try:
+        gateway = _gateway(settings, limiter)
+    except Exception as exc:
+        print(f"Ошибка подключения к Telegram: {exc}", file=sys.stderr)
+        db.close()
+        return 1
+
+    try:
+        result = run_search(
+            gateway, db, settings, limiter, queries, stream,
+            limit_per_query=args.limit,
+            expand=args.expand,
+            max_channels=args.max_channels,
+            config_dir=settings.config_dir,
+        )
+    finally:
+        gateway.disconnect()
+
+    print(f"\nЗапрос: {result['query']}")
+    print(
+        f"Найдено {result['found']} каналов "
+        f"(новых {result['new']}, уже в базе {result['known']})\n"
+    )
+    print(format_table(result["rows"], limit=args.top))
+
+    if result["aborted"]:
+        print(f"\nПрогон остановлен по лимитам Telegram: {result['note']}", file=sys.stderr)
+
+    if args.export and result["rows"]:
+        exportable = [r for r in result["rows"] if r["passed_filters"] and not r["blacklist_hit"]]
+        if exportable:
+            slug = "".join(c if c.isalnum() else "_" for c in result["query"])[:40] or "search"
+            out = Path(args.out) if args.out else (
+                export_dir_for_today(settings.export_dir) / f"search_{slug}.csv"
+            )
+            csv_result = export_csv(exportable, out)
+            print(f"\nCSV: {csv_result['main_count']} строк -> {csv_result['main_file']}")
+            if csv_result["no_contact_file"]:
+                print(
+                    f"CSV: {csv_result['no_contact_count']} без контакта -> "
+                    f"{csv_result['no_contact_file']}"
+                )
+        else:
+            print("\nВ выгрузку никто не прошёл — попробуйте --loose или другие пороги.")
+
+    db.close()
+    return 2 if result["aborted"] else 0
+
+
 def cmd_enrich(args: argparse.Namespace) -> int:
     settings = _settings(args)
     streams = _streams(settings)
@@ -441,6 +539,7 @@ def cmd_stats(args: argparse.Namespace) -> int:
 _COMMANDS = {
     "login": cmd_login,
     "run": cmd_run,
+    "search": cmd_search,
     "enrich": cmd_enrich,
     "import-existing": cmd_import_existing,
     "export": cmd_export,
