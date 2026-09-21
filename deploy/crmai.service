@@ -1,0 +1,28 @@
+[Unit]
+Description=Veles CRM analyzer — вебхук Wazzup + батчи анализа диалогов
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=crmai
+Group=crmai
+WorkingDirectory=/opt/crmai
+EnvironmentFile=/opt/crmai/.env
+ExecStart=/opt/crmai/.venv/bin/python -m crmai serve
+Restart=on-failure
+RestartSec=10
+
+# Базовая изоляция
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+# Каталог нужен на запись: SQLite-база, WAL и amo_tokens.json
+ReadWritePaths=/opt/crmai
+
+StandardOutput=append:/var/log/crmai/service.log
+StandardError=append:/var/log/crmai/service.log
+
+[Install]
+WantedBy=multi-user.target

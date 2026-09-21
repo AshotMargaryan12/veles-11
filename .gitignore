@@ -8,6 +8,8 @@ sessions/
 .env.local
 credentials.json
 service_account.json
+# Обновлённая пара токенов amoCRM (пишется автоматически при refresh)
+amo_tokens.json
 
 # Data
 *.db

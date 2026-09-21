@@ -151,3 +151,87 @@ def streams():
     from tghunter.config import load_streams
 
     return load_streams("config/streams.yaml")
+
+
+# --- Фикстуры ИИ-анализатора диалогов (пакет crmai) --------------------------
+
+
+@pytest.fixture
+def crm_settings(tmp_path):
+    from crmai.config import Settings
+
+    return Settings(
+        amo_domain="veles",
+        amo_access_token="token",
+        amo_client_id="cid",
+        amo_client_secret="secret",
+        amo_refresh_token="refresh",
+        amo_manager_user_id=77,
+        pipeline_ids=[7],
+        anthropic_api_key="key",
+        tg_bot_token="bot",
+        tg_chat_ashot="100",
+        tg_chat_danil="200",
+        db_path=str(tmp_path / "crm.db"),
+        amo_token_file=str(tmp_path / "amo_tokens.json"),
+        prompts_dir="prompts",
+        tz="Europe/Moscow",
+    )
+
+
+@pytest.fixture
+def crm_db(crm_settings):
+    from crmai.db import Database
+
+    database = Database(crm_settings.db_path)
+    yield database
+    database.close()
+
+
+@pytest.fixture
+def crm_prompts():
+    from crmai.prompts import Prompts
+
+    return Prompts.load("prompts")
+
+
+class FakeResponse:
+    """Ответ HTTP-клиента для тестов amo и Telegram."""
+
+    def __init__(self, status_code=200, payload=None):
+        self.status_code = status_code
+        self._payload = payload
+
+    def json(self):
+        if self._payload is None:
+            raise ValueError("нет тела")
+        return self._payload
+
+
+class FakeHttp:
+    """Подменяет requests.Session: отдаёт заготовленные ответы, пишет вызовы."""
+
+    def __init__(self, responses=None):
+        # ключ — (METHOD, кусок пути), значение — FakeResponse или список ответов
+        self.responses = responses or {}
+        self.calls = []
+
+    def _match(self, method, url):
+        for (want_method, fragment), response in self.responses.items():
+            if want_method == method and fragment in url:
+                if isinstance(response, list):
+                    return response.pop(0) if response else FakeResponse(404)
+                return response
+        return FakeResponse(404)
+
+    def request(self, method, url, params=None, json=None, headers=None, timeout=None):
+        self.calls.append({"method": method, "url": url, "params": params, "json": json})
+        return self._match(method, url)
+
+    def post(self, url, json=None, timeout=None, **kwargs):
+        return self.request("POST", url, json=json)
+
+
+@pytest.fixture
+def fake_http():
+    return FakeHttp

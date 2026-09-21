@@ -1,0 +1,28 @@
+# Запуск ИИ-анализатора одной командой:
+#   docker compose -f deploy/docker-compose.yml up -d --build
+# .env лежит в корне репозитория (см. .env.example).
+
+services:
+  crmai:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: crmai
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    ports:
+      - "8080:8080"
+    volumes:
+      - crmai-data:/data
+      # промпты подключены томом: правки company_context.md подхватываются
+      # следующим батчем без пересборки образа
+      - ../prompts:/app/prompts:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  crmai-data:
