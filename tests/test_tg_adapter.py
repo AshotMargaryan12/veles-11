@@ -91,7 +91,7 @@ def test_run_command_end_to_end(tmp_path, monkeypatch, capsys):
             "трейдинг": [Candidate(username="e2e_channel", method="keywords")]
         },
     )
-    monkeypatch.setattr(cli, "_gateway", lambda settings, limiter: gateway)
+    monkeypatch.setattr(cli, "_gateway", lambda settings, limiter, demo=False: gateway)
     monkeypatch.setenv("EXPORT_DIR", str(tmp_path / "exports"))
     monkeypatch.setenv("METHOD_PAUSE_MIN", "0")
     monkeypatch.setenv("METHOD_PAUSE_MAX", "0")
@@ -136,7 +136,7 @@ def test_run_all_stops_after_limit_abort(tmp_path, monkeypatch, capsys):
         def similar_channels(self, username, limit=50):
             raise RunAborted("2 FloodWait подряд — остановлен по лимитам")
 
-    monkeypatch.setattr(cli, "_gateway", lambda s, l: FloodingGateway())
+    monkeypatch.setattr(cli, "_gateway", lambda s, l, demo=False: FloodingGateway())
     monkeypatch.setenv("EXPORT_DIR", str(tmp_path / "exports"))
     monkeypatch.setenv("METHOD_PAUSE_MIN", "0")
     monkeypatch.setenv("METHOD_PAUSE_MAX", "0")

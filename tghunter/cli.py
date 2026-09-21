@@ -48,6 +48,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--config-dir", default=None, help="каталог конфигов (по умолчанию config/)")
     parser.add_argument("--db", default=None, help="путь к SQLite-базе")
     parser.add_argument("-v", "--verbose", action="store_true", help="подробный лог")
+    parser.add_argument(
+        "--demo", action="store_true",
+        help="демо-режим: искать не в Telegram, а во встроенном корпусе каналов "
+             "(без сессии и без Telethon)",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("login", help="создать/проверить сессию Telethon")
@@ -127,6 +132,12 @@ def _settings(args: argparse.Namespace) -> Settings:
         settings.db_path = args.db
     if getattr(args, "max_channels", None):
         settings.max_channels_per_run = args.max_channels
+    if getattr(args, "demo", False):
+        # в демо-режиме сети нет — ждать лимитов Telegram незачем
+        settings.rate_min_interval = 0.0
+        settings.rate_max_interval = 0.0
+        settings.method_pause_min = 0.0
+        settings.method_pause_max = 0.0
     return settings
 
 
@@ -142,7 +153,14 @@ def _limiter(settings: Settings) -> RateLimiter:
     )
 
 
-def _gateway(settings: Settings, limiter: RateLimiter):
+def _gateway(settings: Settings, limiter: RateLimiter, demo: bool = False):
+    if demo:
+        from .demo import DemoGateway, corpus_size
+
+        log.info("Демо-режим: встроенный корпус из %d каналов, сеть не используется",
+                 corpus_size())
+        return DemoGateway()
+
     from .tg import TelegramGateway
 
     gateway = TelegramGateway(settings, limiter)
@@ -214,7 +232,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     db = Database(settings.db_path)
 
     try:
-        gateway = _gateway(settings, limiter)
+        gateway = _gateway(settings, limiter, demo=getattr(args, "demo", False))
     except Exception as exc:
         print(f"Ошибка подключения к Telegram: {exc}", file=sys.stderr)
         db.close()
@@ -310,7 +328,7 @@ def cmd_search(args: argparse.Namespace) -> int:
     limiter = _limiter(settings)
     db = Database(settings.db_path)
     try:
-        gateway = _gateway(settings, limiter)
+        gateway = _gateway(settings, limiter, demo=getattr(args, "demo", False))
     except Exception as exc:
         print(f"Ошибка подключения к Telegram: {exc}", file=sys.stderr)
         db.close()
@@ -373,7 +391,7 @@ def cmd_enrich(args: argparse.Namespace) -> int:
     limiter = _limiter(settings)
     db = Database(settings.db_path)
     try:
-        gateway = _gateway(settings, limiter)
+        gateway = _gateway(settings, limiter, demo=getattr(args, "demo", False))
     except Exception as exc:
         print(f"Ошибка подключения к Telegram: {exc}", file=sys.stderr)
         db.close()
@@ -486,7 +504,7 @@ def cmd_rescan(args: argparse.Namespace) -> int:
     db = Database(settings.db_path)
 
     try:
-        gateway = _gateway(settings, limiter)
+        gateway = _gateway(settings, limiter, demo=getattr(args, "demo", False))
     except Exception as exc:
         print(f"Ошибка подключения к Telegram: {exc}", file=sys.stderr)
         db.close()

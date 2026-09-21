@@ -192,7 +192,7 @@ def test_search_command_end_to_end(tmp_path, monkeypatch, capsys):
         "cli_found",
         keyword_hits={"трейдинг": [Candidate(username="cli_found", method="keywords")]},
     )
-    monkeypatch.setattr(cli, "_gateway", lambda s, l: gateway)
+    monkeypatch.setattr(cli, "_gateway", lambda s, l, demo=False: gateway)
     monkeypatch.setenv("EXPORT_DIR", str(tmp_path / "exports"))
     monkeypatch.setenv("RATE_MIN_INTERVAL", "0")
     monkeypatch.setenv("RATE_MAX_INTERVAL", "0")
@@ -214,7 +214,7 @@ def test_search_command_prompts_when_no_query(tmp_path, monkeypatch, capsys):
         "typed_hit",
         keyword_hits={"крипта": [Candidate(username="typed_hit", method="keywords")]},
     )
-    monkeypatch.setattr(cli, "_gateway", lambda s, l: gateway)
+    monkeypatch.setattr(cli, "_gateway", lambda s, l, demo=False: gateway)
     monkeypatch.setattr("builtins.input", lambda _prompt="": "крипта")
     monkeypatch.setenv("EXPORT_DIR", str(tmp_path / "exports"))
 

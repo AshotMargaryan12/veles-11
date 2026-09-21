@@ -78,6 +78,25 @@ Bot API не умеет ни глобальный поиск, ни чтение 
 
 Общие флаги: `--db PATH`, `--config-dir PATH`, `-v` (подробный лог).
 
+### Потрогать без Telegram: демо-режим
+
+Флаг `--demo` подменяет Telegram встроенным корпусом из 25 вымышленных каналов.
+Сеть не используется, сессия и Telethon не нужны — но скоринг, фильтры, дедуп,
+база и CSV работают настоящие. Удобно, чтобы освоиться до боевого прогона.
+
+```bash
+git clone <repo> && cd tghunter
+pip install PyYAML                     # для демо больше ничего не нужно
+python -m tghunter --demo search "трейдинг"
+python -m tghunter --demo search "фьючерсы" --expand
+python -m tghunter --demo run --stream crypto_core
+python -m tghunter --demo --db demo.db search "инвестиции" && python -m tghunter --db demo.db stats
+```
+
+Каналы в корпусе подобраны так, чтобы задеть каждое правило: монетизированные
+и чистые, живые и заброшенные, памперы под стоп-фильтр, каналы без контакта,
+русские, англоязычные и тюркоязычные.
+
 ### Свободный поиск
 
 Когда нужно не по пресету, а по конкретной фразе:
@@ -381,6 +400,7 @@ python -m pytest tests/ -q
 tghunter/
 ├── cli.py            CLI и команды
 ├── search.py         свободный поиск по запросу
+├── demo.py           встроенный корпус каналов для --demo
 ├── config.py         .env, streams.yaml, seed-файлы
 ├── models.py         Candidate / Post / ChannelSnapshot
 ├── tg.py             единственный модуль, знающий про Telethon
