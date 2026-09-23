@@ -26,7 +26,9 @@ from .exporters.csv_export import export_csv
 from .exporters.notify import build_summary, send_summary
 from .pipeline import Pipeline, export_dir_for_today
 from .ratelimit import RateLimiter
+from .credentials import FIELDS, SECRET_FIELDS, apply_to_environ, current_values, mask, write_env
 from .search import build_adhoc_stream, format_table, run_search, split_queries
+from .sources import SOURCES, build_source, describe_sources
 
 log = logging.getLogger("tghunter")
 
@@ -49,9 +51,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--db", default=None, help="путь к SQLite-базе")
     parser.add_argument("-v", "--verbose", action="store_true", help="подробный лог")
     parser.add_argument(
+        "--source", choices=SOURCES, default=None,
+        help="откуда брать каналы: telegram (MTProto), tgstat (по API-ключу), "
+             "demo (встроенный корпус). По умолчанию telegram",
+    )
+    parser.add_argument(
         "--demo", action="store_true",
-        help="демо-режим: искать не в Telegram, а во встроенном корпусе каналов "
-             "(без сессии и без Telethon)",
+        help="то же, что --source demo: встроенный корпус, без сессии и без сети",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -117,6 +123,21 @@ def build_parser() -> argparse.ArgumentParser:
     rescan.add_argument("--older-than", type=int, default=30, help="старше скольки дней")
     rescan.add_argument("--limit", type=int, default=100, help="сколько каналов за раз")
 
+    web = sub.add_parser(
+        "web", help="локальный веб-интерфейс: поля для ключей и строка поиска"
+    )
+    web.add_argument("--port", type=int, default=8765, help="порт на 127.0.0.1")
+    web.add_argument("--source", dest="web_source", default="demo",
+                     choices=SOURCES, help="источник, выбранный в форме по умолчанию")
+    web.add_argument("--no-browser", dest="open_browser", action="store_false",
+                     default=True, help="не открывать браузер самому")
+
+    setup = sub.add_parser(
+        "setup", help="ввести ключи сервисов и проверить, что они приняты"
+    )
+    setup.add_argument("--check", action="store_true",
+                       help="только показать статус источников, ничего не спрашивать")
+
     sub.add_parser("stats", help="сводка базы")
 
     return parser
@@ -132,7 +153,7 @@ def _settings(args: argparse.Namespace) -> Settings:
         settings.db_path = args.db
     if getattr(args, "max_channels", None):
         settings.max_channels_per_run = args.max_channels
-    if getattr(args, "demo", False):
+    if _source_key(args) == "demo":
         # в демо-режиме сети нет — ждать лимитов Telegram незачем
         settings.rate_min_interval = 0.0
         settings.rate_max_interval = 0.0
@@ -153,19 +174,20 @@ def _limiter(settings: Settings) -> RateLimiter:
     )
 
 
-def _gateway(settings: Settings, limiter: RateLimiter, demo: bool = False):
+def _source_key(args: argparse.Namespace) -> str:
+    """Какой источник выбран: --source, --demo или telegram по умолчанию."""
+    if getattr(args, "source", None):
+        return args.source
+    if getattr(args, "demo", False):
+        return "demo"
+    return "telegram"
+
+
+def _gateway(settings: Settings, limiter: RateLimiter, demo: bool = False,
+             source: str = "telegram"):
     if demo:
-        from .demo import DemoGateway, corpus_size
-
-        log.info("Демо-режим: встроенный корпус из %d каналов, сеть не используется",
-                 corpus_size())
-        return DemoGateway()
-
-    from .tg import TelegramGateway
-
-    gateway = TelegramGateway(settings, limiter)
-    gateway.connect()
-    return gateway
+        source = "demo"
+    return build_source(settings, limiter, source)
 
 
 def _do_optional_exports(
@@ -232,7 +254,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     db = Database(settings.db_path)
 
     try:
-        gateway = _gateway(settings, limiter, demo=getattr(args, "demo", False))
+        gateway = _gateway(settings, limiter, source=_source_key(args))
     except Exception as exc:
         print(f"Ошибка подключения к Telegram: {exc}", file=sys.stderr)
         db.close()
@@ -328,7 +350,7 @@ def cmd_search(args: argparse.Namespace) -> int:
     limiter = _limiter(settings)
     db = Database(settings.db_path)
     try:
-        gateway = _gateway(settings, limiter, demo=getattr(args, "demo", False))
+        gateway = _gateway(settings, limiter, source=_source_key(args))
     except Exception as exc:
         print(f"Ошибка подключения к Telegram: {exc}", file=sys.stderr)
         db.close()
@@ -391,7 +413,7 @@ def cmd_enrich(args: argparse.Namespace) -> int:
     limiter = _limiter(settings)
     db = Database(settings.db_path)
     try:
-        gateway = _gateway(settings, limiter, demo=getattr(args, "demo", False))
+        gateway = _gateway(settings, limiter, source=_source_key(args))
     except Exception as exc:
         print(f"Ошибка подключения к Telegram: {exc}", file=sys.stderr)
         db.close()
@@ -504,7 +526,7 @@ def cmd_rescan(args: argparse.Namespace) -> int:
     db = Database(settings.db_path)
 
     try:
-        gateway = _gateway(settings, limiter, demo=getattr(args, "demo", False))
+        gateway = _gateway(settings, limiter, source=_source_key(args))
     except Exception as exc:
         print(f"Ошибка подключения к Telegram: {exc}", file=sys.stderr)
         db.close()
@@ -519,6 +541,78 @@ def cmd_rescan(args: argparse.Namespace) -> int:
     print(f"Пересканировано {result['updated']} из {result['checked']} каналов")
     db.close()
     return 2 if result["aborted"] else 0
+
+
+def cmd_web(args: argparse.Namespace) -> int:
+    """Локальный веб-интерфейс с полями для ключей и строкой поиска."""
+    from .web import serve
+
+    settings = _settings(args)
+    serve(
+        port=args.port,
+        db_path=settings.db_path,
+        default_source=args.web_source,
+        open_browser=args.open_browser,
+    )
+    return 0
+
+
+def _print_sources(settings: Settings) -> None:
+    print("\nИсточники:")
+    for info in describe_sources(settings):
+        mark = "готов" if info.ready else "не настроен"
+        print(f"  [{'x' if info.ready else ' '}] {info.title:<22} {mark}")
+        print(f"      методы: {info.methods}")
+        print(f"      {info.hint}")
+
+
+def cmd_setup(args: argparse.Namespace) -> int:
+    """Ввод ключей сервисов с проверкой, что они приняты."""
+    settings = _settings(args)
+
+    if args.check:
+        _print_sources(settings)
+        return 0
+
+    print("Ключи сохраняются в .env рядом с проектом, права 600.")
+    print("Enter — оставить как есть. Секреты показаны маской.\n")
+
+    values = current_values()
+    updates: dict[str, str] = {}
+    for key, title, hint in FIELDS:
+        current = values.get(key, "")
+        shown = mask(current) if key in SECRET_FIELDS else current
+        suffix = f" [{shown}]" if shown else ""
+        try:
+            typed = input(f"{title} ({hint}){suffix}: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+        if typed:
+            updates[key] = typed
+
+    if not updates:
+        print("\nНичего не изменилось.")
+        _print_sources(settings)
+        return 0
+
+    changed = write_env(updates)
+    apply_to_environ(updates)
+    print(f"\nСохранено в .env: {', '.join(changed)}")
+
+    settings = load_settings()
+    if settings.tgstat_token:
+        from .sources.tgstat import TGStatGateway
+
+        print("\nПроверяю ключ TGStat...")
+        try:
+            ok, message = TGStatGateway(settings.tgstat_token).check()
+        except Exception as exc:
+            ok, message = False, str(exc)
+        print(f"  TGStat: {'OK' if ok else 'ошибка'} — {message}")
+
+    _print_sources(settings)
+    return 0
 
 
 def cmd_stats(args: argparse.Namespace) -> int:
@@ -562,6 +656,8 @@ _COMMANDS = {
     "import-existing": cmd_import_existing,
     "export": cmd_export,
     "rescan": cmd_rescan,
+    "web": cmd_web,
+    "setup": cmd_setup,
     "stats": cmd_stats,
 }
 

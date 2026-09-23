@@ -93,6 +93,9 @@ class Settings:
     bot_token: str = ""
     summary_chat_id: str = ""
 
+    tgstat_token: str = ""
+    telemetr_token: str = ""
+
     amo_base_url: str = ""
     amo_access_token: str = ""
     amo_pipeline_id: str = ""
@@ -110,6 +113,10 @@ class Settings:
     @property
     def summary_enabled(self) -> bool:
         return bool(self.bot_token and self.summary_chat_id)
+
+    @property
+    def tgstat_enabled(self) -> bool:
+        return bool(self.tgstat_token)
 
     @property
     def amo_enabled(self) -> bool:
@@ -139,6 +146,8 @@ def load_settings(env_file: Optional[str] = None) -> Settings:
         config_dir=_env("CONFIG_DIR", DEFAULT_CONFIG_DIR),
         bot_token=_env("TG_BOT_TOKEN"),
         summary_chat_id=_env("TG_SUMMARY_CHAT_ID"),
+        tgstat_token=_env("TGSTAT_TOKEN"),
+        telemetr_token=_env("TELEMETR_TOKEN"),
         amo_base_url=_env("AMO_BASE_URL").rstrip("/"),
         amo_access_token=_env("AMO_ACCESS_TOKEN"),
         amo_pipeline_id=_env("AMO_PIPELINE_ID"),
