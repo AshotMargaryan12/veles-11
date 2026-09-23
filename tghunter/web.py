@@ -75,6 +75,10 @@ _CSS = """
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,
 "Segoe UI",Roboto,sans-serif;padding:0 16px 56px}
 .wrap{max-width:1080px;margin:0 auto}
+/* Ссылки берут цвет из токенов: дефолтный синий нечитаем на тёмном фоне */
+a{color:var(--accent);text-decoration-color:color-mix(in srgb,var(--accent) 45%,transparent)}
+a:hover{text-decoration-thickness:2px}
+a:visited{color:var(--accent)}
 header{padding:28px 0 18px;border-bottom:1px solid var(--line);margin-bottom:24px;
 display:flex;gap:16px;align-items:baseline;flex-wrap:wrap}
 h1{font-size:22px;margin:0;letter-spacing:-.01em}
@@ -119,6 +123,9 @@ td.num{font-family:ui-monospace,monospace;font-variant-numeric:tabular-nums;text
 .score{font-family:ui-monospace,monospace;font-weight:600;color:var(--accent)}
 .tag{display:inline-block;font:11px ui-monospace,monospace;padding:2px 7px;border-radius:3px;
 background:var(--surface2);color:var(--muted);white-space:nowrap}
+/* Причина отсева бывает длинной — переносим её, а не обрезаем */
+.tag.fail,.tag.black{white-space:normal;max-width:34ch;line-height:1.45}
+td:last-child{min-width:150px}
 .tag.pass{background:var(--passbg);color:var(--pass)}
 .tag.fail{background:var(--failbg);color:var(--fail)}
 .tag.black{background:var(--warnbg);color:var(--warn)}
