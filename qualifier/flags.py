@@ -165,10 +165,10 @@ def metric_flags(data: PlatformData, m: PlatformMetrics, th: Thresholds) -> list
         and m.er < dead_max_er
         and reactions_low
     ):
-        reactions = "реакции отключены" if m.avg_reactions is None else f"{m.avg_reactions}"
+        reactions = "реакции отключены" if m.avg_reactions is None else f"реакций в среднем {m.avg_reactions}"
         flags.append(Flag(
             "dead_subs", EXPLANATIONS["dead_subs"],
-            f"{label}: {_n(data.followers)} подписчиков, ER {m.er}%, реакций в среднем {reactions}",
+            f"{label}: {_n(data.followers)} подписчиков, ER {m.er}%, {reactions}",
             p, severity="critical",
         ))
 
