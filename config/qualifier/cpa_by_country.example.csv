@@ -1,0 +1,27 @@
+# ПРИМЕР-ЗАГЛУШКА: ставки ВЫМЫШЛЕННЫЕ. Скопируйте в cpa_by_country.csv и заполните.
+# country_code — ISO-3166 alpha-2; * — ставка по умолчанию для региона
+# region — должен совпадать с region в geo_markers.yaml
+# event — за что платится CPA (FTT = первая сделка)
+country_code,country,region,cpa,currency,event
+RU,Россия,CIS,9,USD,FTT
+UA,Украина,CIS,8,USD,FTT
+KZ,Казахстан,CIS,8,USD,FTT
+BY,Беларусь,CIS,6,USD,FTT
+UZ,Узбекистан,CIS,5,USD,FTT
+TR,Турция,EMEA,9,USD,FTT
+EG,Египет,MENA,7,USD,FTT
+SA,Саудовская Аравия,MENA,15,USD,FTT
+AE,ОАЭ,MENA,16,USD,FTT
+IN,Индия,APAC,4,USD,FTT
+ID,Индонезия,APAC,5,USD,FTT
+VN,Вьетнам,APAC,5,USD,FTT
+BR,Бразилия,LATAM,8,USD,FTT
+NG,Нигерия,AFRICA,4,USD,FTT
+*,,CIS,5,USD,FTT
+*,,MENA,6,USD,FTT
+*,,EMEA,8,USD,FTT
+*,,APAC,4,USD,FTT
+*,,LATAM,6,USD,FTT
+*,,AFRICA,3,USD,FTT
+*,,EU,10,USD,FTT
+*,,NA,12,USD,FTT

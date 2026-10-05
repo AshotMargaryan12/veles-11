@@ -1,0 +1,52 @@
+# ПРИМЕР-ЗАГЛУШКА. Все числа ниже ВЫМЫШЛЕННЫЕ.
+#
+# Скопируйте файл в config/qualifier/criteria.yaml и впишите реальные пороги:
+#     cp config/qualifier/criteria.example.yaml config/qualifier/criteria.yaml
+# criteria.yaml в .gitignore — внутренние пороги в репозиторий не попадают.
+# Пока реального файла нет, карточка помечается «квалификация по примерам-заглушкам».
+#
+# Пороги считаются кодом локально и НИКОГДА не уходят в LLM.
+#
+# affiliate_types.<тип>:
+#   match   — any: тир засчитан, если выполнено ХОТЯ БЫ ОДНО условие
+#             all: нужны все условия тира
+#   tiers   — список тиров; порядок не важен, сортируются по rate
+#     rate                       — ставка тира, %
+#     followers_single_platform  — подписчики на ОДНОЙ площадке (берётся крупнейшая)
+#     community_members          — участники комьюнити-чата (Telegram-группа партнёра
+#                                  или чат обсуждений канала)
+
+affiliate_types:
+  individual:
+    match: any
+    tiers:
+      - rate: 45
+        followers_single_platform: 12000
+        community_members: 9000
+      - rate: 35
+        followers_single_platform: 7000
+        community_members: 5000
+      - rate: 25
+        followers_single_platform: 3000
+        community_members: 2000
+  institutional:
+    match: any
+    tiers:
+      - rate: 45
+        followers_single_platform: 25000
+      - rate: 35
+        followers_single_platform: 15000
+      - rate: 25
+        followers_single_platform: 8000
+
+# Файл ставок CPA по гео — в этом же каталоге
+cpa_rates_file: cpa_by_country.csv
+
+# «Между порогами»: если до следующего тира не хватает меньше этой доли порога
+# или текущий тир взят впритык, карточка помечается «требует ручной проверки»
+borderline_margin: 0.10
+
+# Условия, которые попадают в рекомендацию и черновик заявки
+deal:
+  test_period_days: 30
+  review_metric: "share of registered users who started trading, and trading volume"

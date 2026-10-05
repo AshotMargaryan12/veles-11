@@ -9,6 +9,14 @@ sessions/
 credentials.json
 service_account.json
 
+# Внутренние данные квалификатора: пороги тиров и CPA-ставки — только локально.
+# В репозитории лежат лишь *.example.* с вымышленными числами.
+config/qualifier/criteria.yaml
+config/qualifier/cpa_by_country.csv
+
+# Карточки квалификатора
+reports/
+
 # Data
 *.db
 *.sqlite
