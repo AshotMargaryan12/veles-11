@@ -109,6 +109,18 @@ class TelegramGateway:
         """Синхронный вызов корутины Telethon через его собственный loop."""
         return self._call(lambda: self.client.loop.run_until_complete(coro_factory()), what)
 
+    def run(self, coro_factory: Callable[[], Any], what: str) -> Any:
+        """Публичный вход для других модулей: тот же троттлинг и FloodWait."""
+        return self._run(coro_factory, what)
+
+    @property
+    def functions(self) -> Any:
+        return self._functions
+
+    @property
+    def types(self) -> Any:
+        return self._types
+
     # --- методы поиска ----------------------------------------------------
 
     def search_keyword(self, keyword: str, limit: int = 30) -> list[Candidate]:
@@ -291,6 +303,11 @@ def _to_post(message: Any) -> Post:
         fwd_channel_id = getattr(from_id, "channel_id", None)
         fwd_username = getattr(fwd, "from_name", None)
 
+    comments = None
+    replies = getattr(message, "replies", None)
+    if replies is not None and getattr(replies, "replies", None) is not None:
+        comments = int(replies.replies)
+
     date = message.date
     if date.tzinfo is None:
         date = date.replace(tzinfo=timezone.utc)
@@ -304,4 +321,6 @@ def _to_post(message: Any) -> Post:
         forward_from_channel_id=fwd_channel_id,
         forward_from_username=fwd_username,
         urls=extract_urls(text),
+        grouped_id=getattr(message, "grouped_id", None),
+        comments=comments,
     )

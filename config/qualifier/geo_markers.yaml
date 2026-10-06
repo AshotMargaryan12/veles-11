@@ -1,0 +1,313 @@
+# Словарь эвристики гео аудитории (раздел 4.4 ТЗ). Редактируется без правки кода.
+#
+# countries.<ISO2>:
+#   name       — как страна пишется в карточке
+#   name_en    — как страна пишется в черновике заявки на английском
+#   region     — регион для региональной CPA-ставки (cpa_by_country.csv, строки с *)
+#   languages  — язык контента -> насколько он указывает на страну (0..1).
+#                Коды языков: ru uk be kk uz az ky tg ar fa ur tr en es pt fr de it
+#                pl id vi th ko ja zh hi bn he ka hy
+#   markers    — местные реалии: валюты, банки, платёжки, госсервисы, города.
+#                Без учёта регистра. Латинские маркеры ищутся целым словом
+#                (payme не находится в payments); кириллические до 4 букв — с
+#                начала слова (сбер -> сбербанк, но не «индия» для «дия»),
+#                остальные — подстрокой.
+#                Префикс re: — регулярное выражение (для валютных кодов, которые
+#                совпадают с обычными словами: re:\d\s?tl\b — «500 TL», но не «TL;DR»).
+
+countries:
+  # --- СНГ: отдельные маркеры для RU / UA / KZ / BY (раздел 4.4, п. 4) ---
+  RU:
+    name: Россия
+    name_en: Russia
+    region: CIS
+    languages: {ru: 0.6}
+    markers: [рубл, "₽", "руб.", сбер, тинькофф, т-банк, втб, альфа-банк, газпромбанк,
+              госуслуг, сбп, юmoney, юмани, "цб рф", банк россии, фнс, ндфл, мосбирж,
+              "иис", москв, петербург, питер, новосибирск, екатеринбург, казан, "рф ",
+              wildberries, "ozon"]
+  UA:
+    name: Украина
+    name_en: Ukraine
+    region: CIS
+    languages: {uk: 1.0, ru: 0.2}
+    markers: [грн, гривн, "₴", монобанк, monobank, "mono ", приватбанк, privatbank,
+              ощадбанк, "дія", "дия", нова пошта, "фоп", "нбу", київ, киев, харків,
+              харьков, одес, львів, львов, дніпр, днепр, запоріж, "україн", "украин"]
+  KZ:
+    name: Казахстан
+    name_en: Kazakhstan
+    region: CIS
+    languages: {kk: 1.0, ru: 0.12}
+    markers: [тенге, "₸", "kzt", kaspi, каспи, halyk, халык, "иин", egov, алматы,
+              астана, шымкент, караганд, "kase", "aifc", "мфца", "казахстан"]
+  BY:
+    name: Беларусь
+    name_en: Belarus
+    region: CIS
+    languages: {be: 1.0, ru: 0.08}
+    markers: ["byn", "бел. руб", белорусск, ерип, беларусбанк, приорбанк, белинвестбанк,
+              мтбанк, "нбрб", минск, гомел, брест, гродн, витебск, "беларус"]
+  UZ:
+    name: Узбекистан
+    name_en: Uzbekistan
+    region: CIS
+    languages: {uz: 1.0, ru: 0.03}
+    markers: ["so'm", "сўм", "uzs", payme, "click.uz", uzcard, humo, ташкент, toshkent,
+              самарканд, "o'zbekiston", "узбекистан"]
+  KG:
+    name: Кыргызстан
+    name_en: Kyrgyzstan
+    region: CIS
+    languages: {ky: 1.0, ru: 0.02}
+    markers: ["kgs", бишкек, "кыргызстан", "мбанк", "mbank", "элсом"]
+  AZ:
+    name: Азербайджан
+    name_en: Azerbaijan
+    region: CIS
+    languages: {az: 1.0}
+    markers: [manat, "azn", bakı, баку, "azərbaycan", "kapital bank"]
+
+  # --- Ближний Восток и Северная Африка ---
+  EG:
+    name: Египет
+    name_en: Egypt
+    region: MENA
+    languages: {ar: 0.3}
+    markers: ["جنيه", "ج.م", "egp", "القاهرة", cairo, "الإسكندرية", "الاسكندرية", alexandria,
+              "re:مصر(?!ف)", egypt, "المصري", "المصرية", instapay, "انستاباي", "إنستاباي",
+              "فودافون كاش", vodafone cash, "البنك الأهلي", "بنك مصر", "cib", fawry, "فوري"]
+  SA:
+    name: Саудовская Аравия
+    name_en: Saudi Arabia
+    region: MENA
+    languages: {ar: 0.2}
+    markers: ["ريال سعودي", "re:\\d\\s?sar\\b", "الرياض", riyadh, "جدة", jeddah, "السعودية", saudi,
+              "stc pay", "الراجحي", "mada", "تداول السعودية"]
+  AE:
+    name: ОАЭ
+    name_en: UAE
+    region: MENA
+    languages: {ar: 0.1}
+    markers: ["درهم إماراتي", "aed", "دبي", dubai, "أبوظبي", abu dhabi, "الإمارات", "uae"]
+  MA:
+    name: Марокко
+    name_en: Morocco
+    region: MENA
+    languages: {ar: 0.12}
+    markers: ["درهم مغربي", "re:\\d\\s?mad\\b", "المغرب", morocco, maroc, "الدار البيضاء", casablanca,
+              "الرباط", rabat]
+  DZ:
+    name: Алжир
+    name_en: Algeria
+    region: MENA
+    languages: {ar: 0.1}
+    markers: ["دينار جزائري", "dzd", "الجزائر", algérie, algeria, "baridimob"]
+  IQ:
+    name: Ирак
+    name_en: Iraq
+    region: MENA
+    languages: {ar: 0.1}
+    markers: ["دينار عراقي", "iqd", "بغداد", baghdad, "العراق", "زين كاش"]
+  JO:
+    name: Иордания
+    name_en: Jordan
+    region: MENA
+    languages: {ar: 0.05}
+    markers: ["دينار أردني", "jod", "عمّان", "الأردن"]
+  TR:
+    name: Турция
+    name_en: Turkey
+    region: EMEA
+    languages: {tr: 1.0}
+    markers: ["₺", "re:\\d\\s?tl\\b", "türk lirası", istanbul, "i̇stanbul", ankara, izmir, papara,
+              ziraat, "garanti bbva", akbank, "borsa istanbul", "re:\\bbist\\s?100", "spk", btcturk, paribu]
+  IR:
+    name: Иран
+    name_en: Iran
+    region: MENA
+    languages: {fa: 0.9}
+    markers: ["تومان", "ریال", "تهران", "نوبیتکس", nobitex, "ایران"]
+
+  # --- Азия ---
+  IN:
+    name: Индия
+    name_en: India
+    region: APAC
+    languages: {hi: 1.0, en: 0.08, bn: 0.4}
+    markers: ["₹", rupee, "inr", "upi", paytm, phonepe, mumbai, delhi, bengaluru, "sebi",
+              nifty, sensex, "rbi", zerodha, wazirx, coindcx, "रुपये"]
+  PK:
+    name: Пакистан
+    name_en: Pakistan
+    region: APAC
+    languages: {ur: 1.0}
+    markers: ["pkr", "روپے", karachi, lahore, islamabad, jazzcash, easypaisa]
+  BD:
+    name: Бангладеш
+    name_en: Bangladesh
+    region: APAC
+    languages: {bn: 0.6}
+    markers: ["৳", "bdt", "টাকা", dhaka, bkash, nagad]
+  ID:
+    name: Индонезия
+    name_en: Indonesia
+    region: APAC
+    languages: {id: 1.0}
+    markers: [rupiah, "re:\\brp\\s?\\d", jakarta, "ojk", gopay, indodax, tokocrypto]
+  VN:
+    name: Вьетнам
+    name_en: Vietnam
+    region: APAC
+    languages: {vi: 1.0}
+    markers: ["vnđ", "vnd", "hà nội", "tp.hcm", "sài gòn", vietcombank, momo]
+  TH:
+    name: Таиланд
+    name_en: Thailand
+    region: APAC
+    languages: {th: 1.0}
+    markers: ["฿", "บาท", "กรุงเทพ", bitkub]
+  PH:
+    name: Филиппины
+    name_en: Philippines
+    region: APAC
+    languages: {en: 0.05}
+    markers: ["₱", gcash, manila, "pilipinas", philippines, "bsp"]
+  KR:
+    name: Южная Корея
+    name_en: South Korea
+    region: APAC
+    languages: {ko: 1.0}
+    markers: ["₩", upbit, bithumb, "서울"]
+  JP:
+    name: Япония
+    name_en: Japan
+    region: APAC
+    languages: {ja: 1.0}
+    markers: ["円", "東京", bitflyer]
+  CN:
+    name: Китай
+    name_en: China
+    region: APAC
+    languages: {zh: 0.6}
+    markers: ["人民币", "北京", "上海", alipay, wechat pay]
+
+  # --- Латинская Америка ---
+  BR:
+    name: Бразилия
+    name_en: Brazil
+    region: LATAM
+    languages: {pt: 0.8}
+    markers: ["r$", reais, "re:\\bpix\\b", nubank, "são paulo", "rio de janeiro", "cvm", brasil]
+  MX:
+    name: Мексика
+    name_en: Mexico
+    region: LATAM
+    languages: {es: 0.25}
+    markers: ["mxn", cdmx, "méxico", spei, banorte, bitso]
+  AR:
+    name: Аргентина
+    name_en: Argentina
+    region: LATAM
+    languages: {es: 0.15}
+    markers: ["re:\\d\\s?ars\\b", pesos argentinos, buenos aires, mercado pago, argentina, "dólar blue"]
+  CO:
+    name: Колумбия
+    name_en: Colombia
+    region: LATAM
+    languages: {es: 0.12}
+    markers: ["re:\\d\\s?cop\\b", "bogotá", "medellín", colombia, nequi, bancolombia]
+  VE:
+    name: Венесуэла
+    name_en: Venezuela
+    region: LATAM
+    languages: {es: 0.08}
+    markers: [bolívar, "re:\\d\\s?ves\\b", caracas, venezuela, pago móvil]
+
+  # --- Африка ---
+  NG:
+    name: Нигерия
+    name_en: Nigeria
+    region: AFRICA
+    languages: {en: 0.06}
+    markers: ["₦", naira, "ngn", lagos, abuja, opay, palmpay, gtbank, nigeria]
+  KE:
+    name: Кения
+    name_en: Kenya
+    region: AFRICA
+    languages: {en: 0.03}
+    markers: ["ksh", "re:\\d\\s?kes\\b", nairobi, m-pesa, mpesa, kenya]
+  ZA:
+    name: ЮАР
+    name_en: South Africa
+    region: AFRICA
+    languages: {en: 0.03}
+    markers: ["re:\\d\\s?zar\\b", johannesburg, cape town, luno, valr, "south africa"]
+
+  # --- Европа и англоязычные ---
+  ES:
+    name: Испания
+    name_en: Spain
+    region: EU
+    languages: {es: 0.15}
+    markers: [madrid, barcelona, "españa", bizum, "cnmv"]
+  PT:
+    name: Португалия
+    name_en: Portugal
+    region: EU
+    languages: {pt: 0.15}
+    markers: [lisboa, portugal, mb way]
+  DE:
+    name: Германия
+    name_en: Germany
+    region: EU
+    languages: {de: 0.75}
+    markers: [bafin, berlin, "münchen", "deutschland", sparkasse]
+  FR:
+    name: Франция
+    name_en: France
+    region: EU
+    languages: {fr: 0.45}
+    markers: ["amf", paris, "france", "boursorama"]
+  IT:
+    name: Италия
+    name_en: Italy
+    region: EU
+    languages: {it: 0.9}
+    markers: [consob, milano, italia]
+  PL:
+    name: Польша
+    name_en: Poland
+    region: EU
+    languages: {pl: 1.0}
+    markers: ["zł", "pln", warszawa, blik, "polska"]
+  GB:
+    name: Великобритания
+    name_en: United Kingdom
+    region: EU
+    languages: {en: 0.1}
+    markers: ["£", "gbp", london, hmrc, "fca"]
+  US:
+    name: США
+    name_en: United States
+    region: NA
+    languages: {en: 0.3}
+    markers: ["irs", "401k", "roth ira"]
+  GE:
+    name: Грузия
+    name_en: Georgia
+    region: CIS
+    languages: {ka: 1.0}
+    markers: ["₾", "re:\\d\\s?gel\\b", "თბილისი", tbilisi]
+  AM:
+    name: Армения
+    name_en: Armenia
+    region: CIS
+    languages: {hy: 1.0}
+    markers: ["֏", "re:\\d\\s?amd\\b", "երևան", yerevan]
+  IL:
+    name: Израиль
+    name_en: Israel
+    region: EMEA
+    languages: {he: 1.0}
+    markers: ["₪", "re:\\d\\s?ils\\b", "שקל", "תל אביב"]

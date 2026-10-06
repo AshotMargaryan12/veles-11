@@ -64,6 +64,10 @@ class Post:
     forward_from_channel_id: Optional[int] = None
     forward_from_username: Optional[str] = None
     urls: list[str] = field(default_factory=list)
+    # id альбома: сообщения одного альбома делят просмотры и считаются одним постом
+    grouped_id: Optional[int] = None
+    # число комментариев под постом (если у канала есть чат обсуждений)
+    comments: Optional[int] = None
 
     def age_days(self, now: Optional[datetime] = None) -> float:
         now = now or datetime.now(timezone.utc)

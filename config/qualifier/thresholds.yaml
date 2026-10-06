@@ -1,0 +1,119 @@
+# Пороги метрик и флагов риска (раздел 6 ТЗ). Это не внутренние ставки —
+# файл лежит в репозитории, правьте под свой опыт.
+
+platforms:
+  telegram:
+    # сколько последних постов берём для просмотров (раздел 4.1: 10-20)
+    views_window: 20
+    # посты моложе N часов ещё не набрали просмотры — в медиану не идут
+    views_min_age_hours: 24
+    # low_er: ER (медиана просмотров / подписчики) ниже порога для размера канала
+    er_min:
+      - max_followers: 10000      # каналы до 10k
+        min_er: 10.0
+      - max_followers: null       # остальные
+        min_er: 5.0
+  youtube:
+    # ER на YouTube = медиана просмотров видео / подписчики; у больших каналов
+    # нормой считаются единицы процентов
+    views_window: 10
+    views_min_age_hours: 72
+    er_min:
+      - max_followers: 10000
+        min_er: 4.0
+      - max_followers: null
+        min_er: 1.0
+  x:
+    # ER на X = медиана показов (impressions) / фолловеры
+    views_window: 20
+    views_min_age_hours: 24
+    er_min:
+      - max_followers: 10000
+        min_er: 3.0
+      - max_followers: null
+        min_er: 1.0
+
+# Окно «постов за N дней»
+frequency_window_days: 30
+# Сколько последних постов проверяем на рекламные маркеры (раздел 4.1)
+ads_window_posts: 30
+
+# views_spike: разброс просмотров аномально высокий
+views_spike:
+  min_sample: 5          # меньше постов — не судим
+  cv_max: 1.0            # коэффициент вариации (стд. отклонение / среднее)
+  max_to_median: 5.0     # самый просматриваемый пост / медиана
+
+# dead_subs: много подписчиков, мало просмотров, реакций нет.
+# max_er — по площадкам. Если площадка не отдаёт реакции (yt-dlp), флаг не ставится:
+# «нет данных» не равно «нет реакций». В Telegram отключённые реакции считаются как ноль.
+dead_subs:
+  min_followers: 3000
+  max_er:
+    telegram: 3.0
+    youtube: 0.5
+    x: 0.3
+  max_avg_reactions: 3.0
+
+# no_comments: нет чата обсуждений и реакций почти нет
+no_comments:
+  max_avg_reactions: 3.0
+
+# inactive: давно нет постов
+inactive:
+  max_days_since_last_post: 14
+
+# airdrop_heavy без LLM: доля постов с айрдроп-лексикой.
+# Латинские слова ищутся с начала слова (airdrop -> airdrops), остальные — подстрокой.
+airdrop:
+  min_share: 0.4
+  keywords:
+    - airdrop
+    - air drop
+    - аирдроп
+    - айрдроп
+    - эирдроп
+    - ретродроп
+    - retrodrop
+    - testnet
+    - тестнет
+    - claim
+    - клейм
+    - поинты
+    - фарм
+    - farming
+    - whitelist
+    - вайтлист
+    - galxe
+    - zealy
+    - layer3
+    - "إيردروب"
+    - "ايردروب"
+    - "اير دروب"
+    - "توزيع مجاني"
+
+# brand_risk без LLM: явные обещания доходности и памп-группы.
+# Просто «памп»/«pump» не берём: в трейдинг-каналах это описание движения рынка.
+brand_risk_markers:
+  - гарантированн
+  - без риска
+  - без рисков
+  - 100% прибыл
+  - 100% профит
+  - пассивный доход от
+  - удвоим депозит
+  - x100 за
+  - иксы за неделю
+  - памп-групп
+  - пампим
+  - pump group
+  - pump signal
+  - guaranteed profit
+  - guaranteed return
+  - risk-free
+  - risk free
+  - double your
+  - "ربح مضمون"
+  - "أرباح مضمونة"
+  - "بدون مخاطر"
+  - garantili kazanç

@@ -1,3 +1,22 @@
+# Инструменты KOL-команды
+
+В репозитории два инструмента:
+
+| Инструмент | Что делает | Документация |
+|---|---|---|
+| **tghunter** | находит Telegram-каналы под партнёрские заходы, собирает лонглист | этот README |
+| **qualify** | по ссылке на площадку блогера собирает карточку квалификации: метрики, гео, тир, CPA, флаги риска и черновик заявки на повышение ставки; с объёмами партнёра (нашей или другой биржи) — тир по объёмам, whitelisting и ROI | [docs/qualifier.md](docs/qualifier.md) |
+
+```bash
+pip install -e ".[web]"
+qualify --demo t.me/demo_airdrop_eg youtube.com/@demo_airdrop_eg   # карточка без ключей и сети
+qualify t.me/channel youtube.com/@channel --geo EG --notes "..."    # реальный партнёр
+qualify batch links.txt --csv out.csv                                # пакетный режим
+qualify config import --cpa CP1T.xlsx --roi ROI.xlsx --guidelines SOP.docx  # внутренние файлы -> локальные конфиги
+```
+
+---
+
 # tghunter — парсер Telegram-каналов для хантинга блогеров
 
 Инструмент для системного поиска телеграм-каналов финансовой и крипто-тематики

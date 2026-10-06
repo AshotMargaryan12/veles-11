@@ -1,0 +1,55 @@
+# ПРИМЕР-ЗАГЛУШКА. Все числа ниже ВЫМЫШЛЕННЫЕ.
+#
+# Реальный файл volume_criteria.yaml (в .gitignore) собирается командой импорта
+# из ROI-шаблона и регламента whitelisting:
+#     qualify config import --roi "ROI template.xlsx" --guidelines "Guidelines.docx"
+# или вручную: скопируйте этот файл в volume_criteria.yaml и впишите реальные числа.
+#
+# Всё это считается локально и НИКОГДА не уходит в LLM.
+
+# Период оценки, месяцев: объёмы и трейдеры из формы (в месяц) умножаются на него
+evaluation_months: 3
+
+# Тиры автооценки по рынкам: ставка, объём и новые трейдеры ЗА ПЕРИОД ОЦЕНКИ
+markets:
+  spot:
+    default_rate: 15            # ставка, если ни один тир не достигнут
+    invitee_limit: "VIP < 6"    # условие на приглашённых — проверяется в CRM
+    tiers:
+      - {rate: 45, volume: 24000000, new_traders: 20}
+      - {rate: 35, volume: 3000000, new_traders: 12}
+      - {rate: 25, volume: 300000, new_traders: 4}
+  futures:
+    default_rate: 8
+    invitee_limit: "VIP < 5"
+    tiers:
+      - {rate: 45, volume: 300000000, new_traders: 20}
+      - {rate: 35, volume: 20000000, new_traders: 12}
+      - {rate: 25, volume: 2000000, new_traders: 4}
+
+# Whitelisting для тех, кто не прошёл автооценку (Criteria 1 регламента).
+# Основной показатель (объём ИЛИ новые трейдеры) >= primary_pct % порога тира,
+# второй >= secondary_pct %. requires_top_ftt — вместо второго показателя
+# партнёр в топе по FTT своего региона. months — на сколько месяцев даётся тир.
+eligibility:
+  - {primary_pct: 100, secondary_pct: 70, months: 3}
+  - {primary_pct: 100, secondary_pct: 0, months: 3, requires_top_ftt: true}
+  - {primary_pct: 85, secondary_pct: 55, months: 1}
+
+# Доля taker-объёма (остальное — maker)
+taker_share:
+  spot: 0.55
+  futures: 0.65
+
+# Эффективные комиссии (доля от объёма): наши и конкурента — для ROI
+fees:
+  ours:
+    spot_taker: 0.0006
+    spot_maker: 0.0003
+    futures_taker: 0.0004
+    futures_maker: 0.00015
+  competitor:
+    spot_taker: 0.0009
+    spot_maker: 0.0007
+    futures_taker: 0.0005
+    futures_maker: 0.00025
