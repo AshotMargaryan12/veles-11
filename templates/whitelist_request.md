@@ -9,7 +9,8 @@
 
 Доступные {{поля}}: PARTNER_NAME, PARTNER_TYPE, LINKS, CHECK_DATE, METRICS,
 AUDIENCE_LINE, GEO_LINE, TIER_LINE, CRITERIA_LINE, CPA_LINE, DEAL_STRUCTURE,
-REVIEW_TERMS, RISKS_LIST, MANAGER_NOTES.
+REVIEW_TERMS, RISKS_LIST, MANAGER_NOTES,
+REQUEST_LINE, VOLUME_LINE, ROI_LINE (объёмы и ROI — если указаны, иначе пусто).
 
 Язык текста — DRAFT_LANGUAGE в .env (en по умолчанию, поддерживается ru).
 Комментарии в HTML-скобках (как этот) в итоговый текст не попадают.
@@ -29,9 +30,14 @@ REVIEW_TERMS, RISKS_LIST, MANAGER_NOTES.
 [[AUDIENCE_SUMMARY: 2-3 sentences on who the audience is and how likely it is to trade, grounded in the audience assessment and its evidence]]
 
 **Requested rate and criteria**
+{{REQUEST_LINE}}
 {{TIER_LINE}}
 {{CRITERIA_LINE}}
 {{CPA_LINE}}
+
+**Trading volume and ROI**
+{{VOLUME_LINE}}
+{{ROI_LINE}}
 
 **Why this partner**
 [[JUSTIFICATION: 2-4 short bullet points on why the partner is worth working with, based only on public metrics and content]]

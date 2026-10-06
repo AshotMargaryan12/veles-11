@@ -35,7 +35,7 @@ affiliate_types:
       - rate: 45
         followers_single_platform: 25000
       - rate: 35
-        followers_single_platform: 15000
+        followers_single_platform: 14000
       - rate: 25
         followers_single_platform: 8000
 

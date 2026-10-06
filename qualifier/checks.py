@@ -17,7 +17,7 @@ Result = tuple[str, str, str]  # (ok|warn|error, что, детали)
 KNOWN_FIELDS = {
     "PARTNER_NAME", "PARTNER_TYPE", "LINKS", "CHECK_DATE", "METRICS", "AUDIENCE_LINE",
     "GEO_LINE", "TIER_LINE", "CRITERIA_LINE", "CPA_LINE", "DEAL_STRUCTURE", "REVIEW_TERMS",
-    "RISKS_LIST", "MANAGER_NOTES",
+    "RISKS_LIST", "MANAGER_NOTES", "REQUEST_LINE", "VOLUME_LINE", "ROI_LINE",
 }
 
 
@@ -73,6 +73,21 @@ def check_files(settings: Settings, env_file: str = ".env") -> list[Result]:
 
     _safe(results, "thresholds.yaml", thresholds)
 
+    def volume() -> Result:
+        from .config import load_volume_criteria
+
+        vc = load_volume_criteria(config_dir)
+        if vc is None:
+            return ("warn", "volume_criteria.yaml", "нет файла — блок объёмов и ROI выключен")
+        detail = (f"{vc.path}: тиров spot {len(vc.markets['spot'].tiers)}, futures "
+                  f"{len(vc.markets['futures'].tiers)}, правил whitelisting {len(vc.eligibility)}")
+        if vc.is_example:
+            return ("warn", "volume_criteria.yaml",
+                    "нет реального файла — работают ПРИМЕРЫ-ЗАГЛУШКИ (qualify config import). " + detail)
+        return ("ok", "volume_criteria.yaml", detail)
+
+    _safe(results, "volume_criteria.yaml", volume)
+
     def geo() -> Result:
         profiles = load_geo_profiles(config_dir)
         if not profiles:
@@ -103,7 +118,8 @@ def check_files(settings: Settings, env_file: str = ".env") -> list[Result]:
     gitignore = Path(".gitignore")
     if gitignore.exists():
         text = gitignore.read_text(encoding="utf-8")
-        missing = [p for p in ("criteria.yaml", "cpa_by_country.csv", "*.session", ".env") if p not in text]
+        missing = [p for p in ("criteria.yaml", "cpa_by_country.csv", "volume_criteria.yaml", "*.session", ".env")
+                   if p not in text]
         results.append(
             ("ok", ".gitignore", "сессия, ключи и внутренние ставки исключены") if not missing
             else ("error", ".gitignore", f"не исключены: {', '.join(missing)}")

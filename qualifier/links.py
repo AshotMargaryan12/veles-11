@@ -178,11 +178,20 @@ def parse_links(raw_links: list[str]) -> list[PlatformRef]:
 _OPTION_KEYS = {"geo", "type", "notes"}
 
 
+def _performance_keys() -> set[str]:
+    from .performance import PERFORMANCE_FIELDS
+
+    return set(PERFORMANCE_FIELDS)
+
+
 def parse_batch_line(line: str, defaults: Optional[PartnerRequest] = None) -> Optional[PartnerRequest]:
     """Строка файла пакетного режима -> PartnerRequest.
 
     Формат: ссылки через пробел или запятую, опционально geo=EG type=institutional
-    notes="..." . Пустые строки и строки с # пропускаются.
+    notes="..." и объёмы: source=Bybit spot_volume=1.2M futures_volume=30M
+    spot_traders=5 futures_traders=4 ftt=8 top_ftt=1 upfront=0 ltv=150
+    comp_spot=60 comp_futures=50 comp_upfront=50k (всё в месяц).
+    Пустые строки и строки с # пропускаются.
     """
     stripped = line.strip()
     if not stripped or stripped.startswith("#"):
@@ -194,12 +203,25 @@ def parse_batch_line(line: str, defaults: Optional[PartnerRequest] = None) -> Op
 
     links: list[str] = []
     options: dict[str, str] = {}
+    perf_keys = _performance_keys()
+    perf_values: dict[str, str] = {}
     for token in tokens:
         key, sep, value = token.partition("=")
         if sep and key.lower() in _OPTION_KEYS:
             options[key.lower()] = value
+        elif sep and key.lower() in perf_keys:
+            perf_values[key.lower()] = value
         else:
             links.extend(p for p in token.split(",") if p)
+
+    performance = None
+    if perf_values:
+        from .performance import performance_from_mapping
+
+        try:
+            performance = performance_from_mapping(perf_values)
+        except ValueError as exc:
+            raise LinkError(f"объёмы в строке {line.strip()!r}: {exc}") from exc
 
     base = defaults or PartnerRequest(links=[])
     return PartnerRequest(
@@ -208,4 +230,5 @@ def parse_batch_line(line: str, defaults: Optional[PartnerRequest] = None) -> Op
         affiliate_type=options.get("type") or base.affiliate_type,
         notes=options.get("notes") or base.notes,
         refresh=base.refresh,
+        performance=performance,
     )

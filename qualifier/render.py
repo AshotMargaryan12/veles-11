@@ -249,6 +249,12 @@ def qualification_section(card: Card) -> str:
     if q.tier_rate is not None:
         basis = []
         for metric in q.tier_met_by:
+            if metric == "followers_with_views":
+                basis.append(
+                    f"подписчики ≥ {num(q.tier_thresholds.get(metric))} при ≥ "
+                    f"{num(q.tier_thresholds.get('avg_views'))} средних просмотров"
+                )
+                continue
             have = q.followers_single_platform if metric == "followers_single_platform" else q.community_members
             basis.append(f"{METRIC_LABELS[metric]}: {num(have)} ≥ {num(q.tier_thresholds.get(metric))}")
         lines.append(f"Предполагаемый тир: {q.tier_rate:g}%" + (f" ({'; '.join(basis)})" if basis else ""))
@@ -256,7 +262,10 @@ def qualification_section(card: Card) -> str:
         lowest = f"{q.lowest_tier_rate:g}%" if q.lowest_tier_rate is not None else "—"
         lines.append(f"Предполагаемый тир: ниже минимального ({lowest})")
     if q.next_tier_rate is not None and q.next_tier_gaps:
-        gaps = " или ".join(f"{num(g.missing)} {METRIC_LABELS[g.metric]}" for g in q.next_tier_gaps)
+        gaps = " или ".join(
+            f"{num(g.missing)} {METRIC_LABELS[g.metric]}" + (f" {g.detail}" if g.detail else "")
+            for g in q.next_tier_gaps
+        )
         label = "До следующего тира" if q.tier_rate is not None else "До минимального тира"
         lines.append(f"{label} ({q.next_tier_rate:g}%): не хватает {gaps}")
     elif q.tier_rate is not None:
@@ -273,6 +282,22 @@ def qualification_section(card: Card) -> str:
     if q.manual_review:
         lines.append("ТРЕБУЕТ РУЧНОЙ ПРОВЕРКИ:")
         lines += [f"  - {r}" for r in q.manual_review_reasons]
+    return "\n".join(lines)
+
+
+def volumes_section(card: Card) -> str:
+    """«ОБЪЁМЫ И ROI» — только если менеджер указал объёмы партнёра."""
+    from .performance import market_line, roi_lines
+
+    perf = card.performance
+    if perf is None:
+        return ""
+    source = perf.input.source_label
+    lines = ["\n\nОБЪЁМЫ И ROI", f"Источник объёмов: {source}"]
+    for market in perf.markets.values():
+        lines.append(market_line(market, perf.evaluation_months))
+    lines += roi_lines(perf)
+    lines += [f"  * {note}" for note in perf.notes]
     return "\n".join(lines)
 
 
@@ -307,7 +332,7 @@ def render_markdown(card: Card, template: Optional[str] = None) -> str:
         platforms=platforms_line(card),
         metrics=metrics_section(card),
         audience=audience_section(card),
-        qualification=qualification_section(card),
+        qualification=qualification_section(card) + volumes_section(card),
         flags=flags_section(card),
         recommendation="\n".join(card.recommendation),
         draft=draft_note + card.draft.strip(),
@@ -336,7 +361,8 @@ def card_summary(card: Card) -> dict[str, Any]:
         tier, tier_note = f"{q.tier_rate:g}%", "максимальный тир"
     if q.next_tier_rate is not None and q.next_tier_gaps:
         gap = min(q.next_tier_gaps, key=lambda g: g.missing / max(g.need, 1))
-        short = {"followers_single_platform": "подписчиков", "community_members": "в комьюнити"}
+        short = {"followers_single_platform": "подписчиков", "community_members": "в комьюнити",
+                 "followers_with_views": "ср. просмотров"}
         tier_note = f"до {q.next_tier_rate:g}%: −{num(gap.missing)} {short[gap.metric]}"
 
     geo = card.geo
@@ -375,11 +401,43 @@ def card_summary(card: Card) -> dict[str, Any]:
             {"code": f.code, "severity": f.severity, "explanation": f.explanation, "evidence": f.evidence}
             for f in card.flags
         ],
+        "volumes": _volume_summary(card),
         "manual_review": q.manual_review,
         "manual_review_reasons": q.manual_review_reasons,
         "verdict": verdict,
         "recommendation": card.recommendation,
         "warnings": card.warnings,
+    }
+
+
+def _volume_summary(card: Card) -> Optional[dict[str, Any]]:
+    """Плитки и строки блока «Объёмы и ROI» для веб-страницы."""
+    from .performance import market_line, roi_lines
+
+    perf = card.performance
+    if perf is None:
+        return None
+    tiles = []
+    for key, m in perf.markets.items():
+        title = "Spot" if key == "spot" else "Futures"
+        if m.needs_whitelist:
+            value, note, status = f"{m.whitelist_rate:g}%", f"whitelisting на {m.whitelist_months} мес", "good"
+        elif m.auto_passed:
+            value, note, status = f"{m.auto_rate_full:g}%", "автооценка", "good"
+        else:
+            value, note, status = f"{m.default_rate:g}%", "критерий 1 не выполнен", "warn"
+        tiles.append({"label": f"{title} по объёмам", "value": value, "note": note, "status": status})
+    roi = perf.roi
+    if roi is not None and roi.roi is not None:
+        note = f"с LTV {roi.roi_ltv:.2f}" if roi.roi_ltv is not None else "в месяц"
+        tiles.append({"label": "ROI", "value": f"{roi.roi:.2f}", "note": note,
+                      "status": "good" if roi.roi >= 0 else "critical"})
+    return {
+        "source": perf.input.source_label,
+        "external": perf.input.external,
+        "tiles": tiles,
+        "lines": [market_line(m, perf.evaluation_months) for m in perf.markets.values()] + roi_lines(perf),
+        "notes": perf.notes,
     }
 
 
@@ -419,6 +477,7 @@ def card_to_dict(card: Card, include_items: bool = False) -> dict[str, Any]:
         "flags": _plain(card.flags),
         "qualification": _plain(card.qualification),
         "deal": _plain(card.deal),
+        "performance": _plain(card.performance),
         "recommendation": card.recommendation,
         "draft": card.draft,
         "draft_source": card.draft_source,
@@ -440,7 +499,8 @@ CSV_COLUMNS = [
     "days_since_last_post", "avg_reactions", "community_chat", "sells_ads", "contact",
     "language", "geo", "geo_confidence", "audience_type", "conversion", "affiliate_type",
     "tier", "next_tier", "next_tier_gap", "cpa", "manual_review", "flags", "recommendation",
-    "report_path",
+    "volume_source", "spot_volume_month", "futures_volume_month", "spot_rate_volume",
+    "futures_rate_volume", "whitelist_months", "roi", "report_path",
 ]
 
 
@@ -487,6 +547,23 @@ def card_csv_row(card: Card) -> dict[str, Any]:
         "flags": ", ".join(f.code for f in card.flags),
         "recommendation": " ".join(card.recommendation),
         "report_path": card.report_path or "",
+        **_volume_csv(card),
+    }
+
+
+def _volume_csv(card: Card) -> dict[str, Any]:
+    perf = card.performance
+    if perf is None:
+        return {}
+    deal = card.deal
+    return {
+        "volume_source": perf.input.source_label,
+        "spot_volume_month": f"{perf.input.spot_volume:.0f}",
+        "futures_volume_month": f"{perf.input.futures_volume:.0f}",
+        "spot_rate_volume": f"{deal.spot_rate:g}" if deal.spot_rate is not None else "",
+        "futures_rate_volume": f"{deal.futures_rate:g}" if deal.futures_rate is not None else "",
+        "whitelist_months": deal.months or "",
+        "roi": f"{perf.roi.roi:.2f}" if perf.roi and perf.roi.roi is not None else "",
     }
 
 

@@ -314,6 +314,7 @@ class TierGap:
     metric: str
     have: int
     need: int
+    detail: str = ""     # пояснение для составных условий («при 50 000 просмотров»)
 
     @property
     def missing(self) -> int:
@@ -352,6 +353,112 @@ class DealProposal:
     test_period_days: int = 30
     review_metric: str = ""
     submit: bool = True          # подавать ли на повышение сейчас
+    # по объёмам (критерий 1 регламента): ставки по рынкам и срок
+    spot_rate: Optional[float] = None
+    futures_rate: Optional[float] = None
+    months: Optional[int] = None
+    basis: str = ""              # volume | social | none
+
+
+OUR_EXCHANGE = "наша биржа"
+
+
+@dataclass
+class PerformanceInput:
+    """Объёмы партнёра — с нашей биржи или с другой (тогда нужны скриншоты).
+
+    Всё в месяц, как в ROI-шаблоне; на период оценки код умножает сам.
+    Это внутренние данные: в LLM не отправляются.
+    """
+
+    source: str = ""                        # "" — наша биржа, иначе название другой
+    spot_volume: float = 0.0                # $ в месяц
+    futures_volume: float = 0.0             # $ в месяц
+    spot_new_traders: int = 0               # в месяц
+    futures_new_traders: int = 0            # в месяц
+    ftt: int = 0                            # уникальные первые сделки в месяц
+    top_ftt_region: bool = False            # в топе по FTT своего региона
+    upfront: float = 0.0                    # фикс партнёру, $ в месяц
+    ltv: float = 0.0                        # LTV нового трейдера, $
+    proposed_spot_rate: Optional[float] = None     # ставка для ROI вместо расчётной
+    proposed_futures_rate: Optional[float] = None
+    competitor_spot_rate: Optional[float] = None   # предложение конкурента, %
+    competitor_futures_rate: Optional[float] = None
+    competitor_upfront: float = 0.0
+
+    @property
+    def external(self) -> bool:
+        return bool(self.source.strip()) and self.source.strip().lower() not in (
+            "binance", "ours", "our", "наша", OUR_EXCHANGE)
+
+    @property
+    def source_label(self) -> str:
+        return self.source.strip() if self.external else OUR_EXCHANGE
+
+    @property
+    def empty(self) -> bool:
+        return not any((self.spot_volume, self.futures_volume, self.spot_new_traders,
+                        self.futures_new_traders, self.ftt))
+
+
+@dataclass
+class MarketResult:
+    market: str                       # spot | futures
+    volume_month: float = 0.0
+    volume_period: float = 0.0
+    new_traders_period: int = 0
+    ftt_used: bool = False            # новых трейдеров заменили FTT
+    auto_rate_volume: float = 0.0     # автооценка только по объёму
+    auto_rate_full: float = 0.0       # автооценка по объёму и трейдерам
+    default_rate: float = 0.0
+    whitelist_rate: Optional[float] = None
+    whitelist_months: Optional[int] = None
+    whitelist_basis: str = ""
+    alternative: Optional[tuple[float, int]] = None   # ниже ставка, но дольше срок
+    next_gap: str = ""                # чего не хватает до следующего тира
+    invitee_limit: str = ""
+    rate_used: float = 0.0            # ставка, по которой считается ROI
+
+    @property
+    def auto_passed(self) -> bool:
+        return self.auto_rate_full > self.default_rate
+
+    @property
+    def needs_whitelist(self) -> bool:
+        """Whitelisting даёт больше, чем автооценка (или автооценка не пройдена)."""
+        return self.whitelist_rate is not None and self.whitelist_rate > self.auto_rate_full
+
+
+@dataclass
+class RoiResult:
+    segments: list[dict[str, float]] = field(default_factory=list)  # name, volume, fee, rebate
+    revenue: float = 0.0              # комиссия бирже в месяц
+    rebates: float = 0.0              # выплата партнёру по ставке
+    upfront: float = 0.0
+    cost: float = 0.0                 # всё, что отдаём партнёру
+    roi: Optional[float] = None
+    roi_ltv: Optional[float] = None
+    competitor: bool = False
+    competitor_rebates: float = 0.0
+    competitor_upfront: float = 0.0
+    competitor_cost: float = 0.0
+    competitor_revenue: float = 0.0
+    competitor_roi: Optional[float] = None
+    vs_competitor: float = 0.0        # наша выплата минус выплата конкурента
+
+
+@dataclass
+class PerformanceResult:
+    input: PerformanceInput
+    evaluation_months: int
+    markets: dict[str, MarketResult] = field(default_factory=dict)
+    roi: Optional[RoiResult] = None
+    notes: list[str] = field(default_factory=list)
+    criteria_are_examples: bool = False
+
+    @property
+    def criteria1_met(self) -> bool:
+        return any(m.whitelist_rate is not None or m.auto_passed for m in self.markets.values())
 
 
 @dataclass
@@ -363,6 +470,7 @@ class PartnerRequest:
     affiliate_type: str = "individual"
     notes: str = ""
     refresh: bool = False
+    performance: Optional[PerformanceInput] = None
 
 
 @dataclass
@@ -385,6 +493,7 @@ class Card:
     draft: str
     draft_source: str = "local"   # llm | local
     warnings: list[str] = field(default_factory=list)
+    performance: Optional[PerformanceResult] = None
     generated_at: datetime = field(default_factory=utcnow)
     report_path: Optional[str] = None
 

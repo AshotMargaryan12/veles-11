@@ -23,6 +23,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from .config import ConfigError
 from .links import LinkError
 from .models import PartnerRequest
+from .performance import performance_from_mapping
 from .render import card_summary, card_to_dict, render_markdown
 from .service import BudgetExceeded, Qualifier
 
@@ -54,6 +55,10 @@ def _run(state: WebState, payload: dict[str, Any]) -> dict[str, Any]:
     geo = (payload.get("geo") or "").strip().upper() or None
     if geo and len(geo) != 2:
         raise LinkError("гео — двухбуквенный код страны, например EG")
+    try:
+        performance = performance_from_mapping(payload.get("performance") or {})
+    except ValueError as exc:
+        raise LinkError(f"объёмы: {exc}") from exc
     q = state.qualifier()
     q.fetches = 0  # лимит MAX_CHANNELS_PER_RUN — на один запрос страницы
     request = PartnerRequest(
@@ -62,6 +67,7 @@ def _run(state: WebState, payload: dict[str, Any]) -> dict[str, Any]:
         affiliate_type=payload.get("type") or "individual",
         notes=str(payload.get("notes") or ""),
         refresh=bool(payload.get("refresh")),
+        performance=performance,
     )
     llm_backup = q.llm
     if payload.get("no_llm"):
@@ -257,6 +263,16 @@ details[open] summary{margin-bottom:12px}
 .warnings{margin:12px 0 0;padding:0;list-style:none;color:var(--muted);font-size:13px}
 .warnings li::before{content:"⚠ ";color:var(--warn)}
 .overflow{overflow-x:auto}
+.vol{margin-top:16px;border-top:1px solid var(--line);padding-top:12px}
+.vol summary{color:var(--ink);font-weight:600;font-size:14px}
+.vol summary::after{content:"Развернуть"}
+.vol[open] summary::after{content:"Свернуть"}
+.vol .hint{color:var(--muted);font-size:13px;margin:4px 0 0}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:0 16px}
+.sub-title{color:var(--muted);font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;margin:16px 0 0}
+.lines{margin:12px 0 0;padding:0;list-style:none;display:grid;gap:8px}
+.lines li{white-space:pre-wrap;font-size:14px;color:var(--ink);font-family:var(--mono)}
+@media(max-width:640px){.grid3{grid-template-columns:1fr 1fr}}
 table{width:100%;border-collapse:collapse;font-size:14px}
 th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:top}
 th{color:var(--muted);font-weight:500;font-size:13px}
@@ -285,6 +301,40 @@ tr:hover td{background:var(--surface2)}
   </div>
   <label for="notes">Заметки менеджера — попадут в черновик</label>
   <textarea id="notes" rows="2"></textarea>
+  <details class="vol" id="volBox">
+    <summary>Объёмы партнёра — с нашей биржи или с другой</summary>
+    <p class="hint">Необязательно. Всё в месяц; суммы можно писать как 1500000, 1.5M или 200k.
+    Тир по объёмам, whitelisting и ROI считаются локально и в LLM не уходят.</p>
+    <div class="row">
+      <div><label for="vSourceKind">Откуда объёмы</label><select id="vSourceKind">
+        <option value="ours">наша биржа</option><option value="other">другая биржа</option></select></div>
+      <div id="vSourceBox" class="hidden"><label for="vSource">Какая биржа</label>
+        <input id="vSource" placeholder="Bybit, OKX, Bitget…"></div>
+    </div>
+    <div class="row">
+      <div><label for="vSpot">Spot-объём рефералов, $ в месяц</label><input id="vSpot" inputmode="decimal" placeholder="1.2M"></div>
+      <div><label for="vFutures">Futures-объём рефералов, $ в месяц</label><input id="vFutures" inputmode="decimal" placeholder="30M"></div>
+    </div>
+    <div class="grid3">
+      <div><label for="vSpotT">Новые Spot-трейдеры / мес</label><input id="vSpotT" inputmode="numeric"></div>
+      <div><label for="vFutT">Новые Futures-трейдеры / мес</label><input id="vFutT" inputmode="numeric"></div>
+      <div><label for="vFtt">FTT / мес</label><input id="vFtt" inputmode="numeric"></div>
+    </div>
+    <div class="checks"><label><input type="checkbox" id="vTop"> партнёр в топе по FTT своего региона</label></div>
+    <p class="sub-title">Наше предложение</p>
+    <div class="grid3">
+      <div><label for="vUpfront">Фикс партнёру, $ / мес</label><input id="vUpfront" inputmode="decimal"></div>
+      <div><label for="vSpotRate">Ставка Spot для ROI, %</label><input id="vSpotRate" inputmode="decimal" placeholder="расчётная"></div>
+      <div><label for="vFutRate">Ставка Futures для ROI, %</label><input id="vFutRate" inputmode="decimal" placeholder="расчётная"></div>
+    </div>
+    <div class="row"><div><label for="vLtv">LTV нового трейдера, $</label><input id="vLtv" inputmode="decimal"></div><div></div></div>
+    <p class="sub-title">Предложение конкурента</p>
+    <div class="grid3">
+      <div><label for="cSpot">Spot, %</label><input id="cSpot" inputmode="decimal"></div>
+      <div><label for="cFut">Futures, %</label><input id="cFut" inputmode="decimal"></div>
+      <div><label for="cUpfront">Фикс, $ / мес</label><input id="cUpfront" inputmode="decimal"></div>
+    </div>
+  </details>
   <div class="checks">
     <label><input type="checkbox" id="refresh"> обновить данные, не из кэша</label>
     <label><input type="checkbox" id="nollm"> без LLM</label>
@@ -301,6 +351,11 @@ tr:hover td{background:var(--surface2)}
     </div>
     <div id="verdict" class="verdict"></div>
     <div id="tiles" class="tiles"></div>
+    <div id="volResult" class="hidden">
+      <p class="sub-title" id="volTitle">Объёмы и ROI</p>
+      <div id="volTiles" class="tiles"></div>
+      <ul id="volLines" class="lines"></ul>
+    </div>
     <ul id="flags" class="flags"></ul>
     <ul id="warnings" class="warnings"></ul>
   </div>
@@ -339,6 +394,19 @@ function setTheme(theme) {
 $("theme").onclick = () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
 setTheme(document.documentElement.dataset.theme || "dark");
 
+function renderTiles(box, tiles) {
+  box.replaceChildren();
+  tiles.forEach(t => {
+    const tile = el("div", "tile");
+    tile.append(el("div", "label", t.label), el("div", "value", t.value));
+    const note = el("div", "note");
+    if (t.status) note.append(icon(t.status));
+    note.append(el("span", null, t.note || ""));
+    tile.append(note);
+    box.append(tile);
+  });
+}
+
 function renderSummary(s) {
   $("pName").textContent = s.handle && s.handle !== s.partner ? `${s.partner} (${s.handle})` : s.partner;
   $("pPlatforms").textContent = s.platforms;
@@ -350,17 +418,7 @@ function renderSummary(s) {
   (s.recommendation.length ? s.recommendation : ["Рекомендации нет"]).forEach(line => body.append(el("p", null, line)));
   verdict.append(body);
 
-  const tiles = $("tiles");
-  tiles.replaceChildren();
-  s.tiles.forEach(t => {
-    const tile = el("div", "tile");
-    tile.append(el("div", "label", t.label), el("div", "value", t.value));
-    const note = el("div", "note");
-    if (t.status) note.append(icon(t.status));
-    note.append(el("span", null, t.note || ""));
-    tile.append(note);
-    tiles.append(tile);
-  });
+  renderTiles($("tiles"), s.tiles);
 
   const flags = $("flags");
   flags.replaceChildren();
@@ -378,7 +436,29 @@ function renderSummary(s) {
 
   const warnings = $("warnings");
   warnings.replaceChildren(...s.warnings.map(w => el("li", null, w)));
+
+  const vol = s.volumes;
+  $("volResult").classList.toggle("hidden", !vol);
+  if (vol) {
+    $("volTitle").textContent = "Объёмы и ROI — " + vol.source;
+    renderTiles($("volTiles"), vol.tiles);
+    $("volLines").replaceChildren(...vol.lines.concat(vol.notes.map(n => "• " + n)).map(l => el("li", null, l)));
+  }
 }
+
+function performancePayload() {
+  const v = id => $(id).value.trim();
+  return {
+    source: $("vSourceKind").value === "other" ? v("vSource") : "",
+    spot_volume: v("vSpot"), futures_volume: v("vFutures"),
+    spot_traders: v("vSpotT"), futures_traders: v("vFutT"), ftt: v("vFtt"),
+    top_ftt: $("vTop").checked ? "1" : "",
+    upfront: v("vUpfront"), ltv: v("vLtv"),
+    spot_rate: v("vSpotRate"), futures_rate: v("vFutRate"),
+    comp_spot: v("cSpot"), comp_futures: v("cFut"), comp_upfront: v("cUpfront"),
+  };
+}
+$("vSourceKind").onchange = () => $("vSourceBox").classList.toggle("hidden", $("vSourceKind").value !== "other");
 
 async function loadHistory() {
   const r = await fetch("/api/history?days=30");
@@ -407,7 +487,8 @@ $("go").onclick = async () => {
   try {
     const r = await fetch("/api/qualify", {method: "POST", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({links: $("links").value, geo: $("geo").value, type: $("type").value,
-        notes: $("notes").value, refresh: $("refresh").checked, no_llm: $("nollm").checked})});
+        notes: $("notes").value, refresh: $("refresh").checked, no_llm: $("nollm").checked,
+        performance: performancePayload()})});
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || data.detail || r.statusText);
     last = data;

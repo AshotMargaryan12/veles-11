@@ -27,8 +27,9 @@ DEFAULT_CONFIG_DIR = "config/qualifier"
 DEFAULT_TEMPLATES_DIR = "templates"
 DEFAULT_MODEL = "claude-sonnet-4-6"
 
-# Метрики, которые можно использовать как условия тира в criteria.yaml
-TIER_METRICS = ("followers_single_platform", "community_members")
+# Метрики, которые можно использовать как условия тира в criteria.yaml.
+# followers_with_views — составное условие: {followers: N, avg_views: M} на одной площадке
+TIER_METRICS = ("followers_single_platform", "community_members", "followers_with_views")
 
 
 class ConfigError(ValueError):
@@ -140,6 +141,8 @@ def load_settings(env_file: Optional[str] = None) -> Settings:
 class Tier:
     rate: float
     conditions: dict[str, int]
+    # (подписчики, средние просмотры поста) — оба на одной площадке
+    views_combo: Optional[tuple[int, int]] = None
 
 
 @dataclass
@@ -202,9 +205,16 @@ def load_criteria(config_dir: str | Path) -> Criteria:
             if not conditions:
                 raise ConfigError(f"{path}: у тира {name} rate={item['rate']} нет условий")
             try:
+                combo = conditions.pop("followers_with_views", None)
+                views_combo = None
+                if combo is not None:
+                    if not isinstance(combo, dict) or not {"followers", "avg_views"} <= set(combo):
+                        raise ValueError("followers_with_views: нужны followers и avg_views")
+                    views_combo = (int(combo["followers"]), int(combo["avg_views"]))
                 tiers.append(
                     Tier(rate=float(item["rate"]),
-                         conditions={k: int(v) for k, v in conditions.items()})
+                         conditions={k: int(v) for k, v in conditions.items()},
+                         views_combo=views_combo)
                 )
             except (TypeError, ValueError) as exc:
                 raise ConfigError(f"{path}: тир {name}: {exc}") from exc
@@ -220,6 +230,102 @@ def load_criteria(config_dir: str | Path) -> Criteria:
         borderline_margin=float(data.get("borderline_margin", 0.10)),
         test_period_days=int(deal.get("test_period_days", 30)),
         review_metric=str(deal.get("review_metric") or Criteria.review_metric),
+        path=path,
+        is_example=is_example,
+    )
+
+
+# --------------------------------------------------------------------------
+# volume_criteria.yaml — критерии по объёмам и ROI (внутренние данные)
+# --------------------------------------------------------------------------
+
+MARKETS = ("spot", "futures")
+FEE_KEYS = ("spot_taker", "spot_maker", "futures_taker", "futures_maker")
+
+
+@dataclass
+class VolumeTier:
+    rate: float              # ставка тира, %
+    volume: float            # объём за период оценки, $
+    new_traders: int         # новых трейдеров за период оценки
+
+
+@dataclass
+class MarketCriteria:
+    tiers: list[VolumeTier]  # по убыванию ставки
+    default_rate: float      # ставка, если ни один тир не достигнут
+    invitee_limit: str = ""  # условие на приглашённых (например, VIP-уровень)
+
+
+@dataclass
+class EligibilityRule:
+    """Строка таблицы «Criteria 1»: основной показатель ≥ primary%, второй ≥ secondary%."""
+
+    primary_pct: float
+    secondary_pct: float
+    months: int
+    requires_top_ftt: bool = False   # вместо второго показателя — топ по FTT в регионе
+
+
+@dataclass
+class VolumeCriteria:
+    evaluation_months: int
+    markets: dict[str, MarketCriteria]
+    eligibility: list[EligibilityRule]
+    fees: dict[str, float]                 # наши комиссии, доля от объёма
+    competitor_fees: dict[str, float]      # комиссии конкурента
+    taker_share: dict[str, float]          # доля taker-объёма по рынкам
+    path: Optional[Path] = None
+    is_example: bool = False
+
+
+def load_volume_criteria(config_dir: str | Path) -> Optional[VolumeCriteria]:
+    """Критерии по объёмам. Нет ни файла, ни примера — None (блок объёмов выключен)."""
+    path, is_example = _resolve(Path(config_dir), "volume_criteria.yaml")
+    if path is None:
+        return None
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    try:
+        markets: dict[str, MarketCriteria] = {}
+        for market in MARKETS:
+            raw = (data.get("markets") or {}).get(market)
+            if not raw:
+                raise ConfigError(f"{path}: нет markets.{market}")
+            tiers = [
+                VolumeTier(rate=float(t["rate"]), volume=float(t["volume"]),
+                           new_traders=int(t["new_traders"]))
+                for t in raw.get("tiers") or []
+            ]
+            if not tiers:
+                raise ConfigError(f"{path}: у markets.{market} нет тиров")
+            tiers.sort(key=lambda t: t.rate, reverse=True)
+            markets[market] = MarketCriteria(
+                tiers=tiers,
+                default_rate=float(raw.get("default_rate", 0)),
+                invitee_limit=str(raw.get("invitee_limit") or ""),
+            )
+        rules = [
+            EligibilityRule(
+                primary_pct=float(r["primary_pct"]),
+                secondary_pct=float(r.get("secondary_pct", 0)),
+                months=int(r["months"]),
+                requires_top_ftt=bool(r.get("requires_top_ftt", False)),
+            )
+            for r in data.get("eligibility") or []
+        ]
+        fees_raw = data.get("fees") or {}
+        fees = {k: float((fees_raw.get("ours") or {})[k]) for k in FEE_KEYS}
+        competitor = {k: float((fees_raw.get("competitor") or {})[k]) for k in FEE_KEYS}
+        taker = {m: float((data.get("taker_share") or {})[m]) for m in MARKETS}
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ConfigError(f"{path}: {exc}") from exc
+    return VolumeCriteria(
+        evaluation_months=int(data.get("evaluation_months", 3)),
+        markets=markets,
+        eligibility=sorted(rules, key=lambda r: (-r.months, -r.primary_pct)),
+        fees=fees,
+        competitor_fees=competitor,
+        taker_share=taker,
         path=path,
         is_example=is_example,
     )
@@ -427,6 +533,7 @@ class QualifierConfig:
     thresholds: Thresholds
     geo: dict[str, CountryProfile]
     templates_dir: Path
+    volume: Optional[VolumeCriteria] = None
 
     def template(self, name: str, language: Optional[str] = None) -> str:
         """Шаблон; для языка ищется вариант name.<lang>.md, иначе базовый."""
@@ -449,4 +556,5 @@ def load_config(settings: Settings) -> QualifierConfig:
         thresholds=load_thresholds(settings.config_dir),
         geo=load_geo_profiles(settings.config_dir),
         templates_dir=Path(settings.templates_dir),
+        volume=load_volume_criteria(settings.config_dir),
     )

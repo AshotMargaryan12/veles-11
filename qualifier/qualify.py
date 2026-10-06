@@ -10,6 +10,7 @@ from typing import Optional
 from .config import AffiliateType, ConfigError, Criteria, CpaTable, Tier
 from .models import (
     KIND_GROUP,
+    PerformanceResult,
     PLATFORM_TITLES,
     PLATFORM_TELEGRAM,
     AudienceAssessment,
@@ -24,6 +25,7 @@ from .models import (
 METRIC_LABELS = {
     "followers_single_platform": "подписчиков на одной площадке",
     "community_members": "участников комьюнити",
+    "followers_with_views": "средних просмотров поста",
 }
 
 
@@ -49,10 +51,37 @@ def largest_platform(platforms: list[PlatformData]) -> tuple[int, Optional[str]]
     return best, platform
 
 
-def _tier_met(tier: Tier, values: dict[str, int], match: str) -> list[str]:
+def views_by_platform(platforms: list[PlatformData], metrics: Optional[dict] = None) -> list[tuple[int, int]]:
+    """(подписчики, средние просмотры поста) по каждой площадке-каналу."""
+    from .models import platform_key
+
+    pairs = []
+    for data in platforms:
+        if not data.ok or data.kind == KIND_GROUP or not data.followers:
+            continue
+        m = (metrics or {}).get(platform_key(data))
+        if m is not None and m.avg_views is not None:
+            pairs.append((int(data.followers), int(m.avg_views)))
+    return pairs
+
+
+def _combo_met(tier: Tier, pairs: list[tuple[int, int]]) -> bool:
+    if not tier.views_combo:
+        return False
+    followers, views = tier.views_combo
+    return any(f >= followers and v >= views for f, v in pairs)
+
+
+def _tier_met(tier: Tier, values: dict[str, int], match: str,
+              pairs: Optional[list[tuple[int, int]]] = None) -> list[str]:
     met = [k for k, need in tier.conditions.items() if values.get(k, 0) >= need]
+    total = len(tier.conditions)
+    if tier.views_combo:
+        total += 1
+        if _combo_met(tier, pairs or []):
+            met.append("followers_with_views")
     if match == "all":
-        return met if len(met) == len(tier.conditions) else []
+        return met if len(met) == total else []
     return met
 
 
@@ -62,6 +91,7 @@ def qualify(
     cpa: CpaTable,
     geo: GeoEstimate,
     affiliate_type: str = "individual",
+    metrics: Optional[dict] = None,
 ) -> QualificationResult:
     if affiliate_type not in criteria.affiliate_types:
         raise ConfigError(
@@ -85,13 +115,17 @@ def qualify(
     )
 
     current_index: Optional[int] = None
+    pairs = views_by_platform(platforms, metrics)
     for index, tier in enumerate(atype.tiers):  # от высшей ставки к низшей
-        met = _tier_met(tier, values, atype.match)
+        met = _tier_met(tier, values, atype.match, pairs)
         if met:
             current_index = index
             result.tier_rate = tier.rate
             result.tier_met_by = met
             result.tier_thresholds = dict(tier.conditions)
+            if tier.views_combo:
+                result.tier_thresholds["followers_with_views"] = tier.views_combo[0]
+                result.tier_thresholds["avg_views"] = tier.views_combo[1]
             break
 
     next_tier: Optional[Tier] = None
@@ -106,6 +140,15 @@ def qualify(
             for k, need in next_tier.conditions.items()
             if values.get(k, 0) < need
         ]
+        # составное условие показываем, только если подписчиков хватает, а просмотров — нет
+        if next_tier.views_combo and not _combo_met(next_tier, pairs):
+            need_f, need_v = next_tier.views_combo
+            eligible = [v for f, v in pairs if f >= need_f]
+            if eligible:
+                result.next_tier_gaps.append(TierGap(
+                    metric="followers_with_views", have=max(eligible), need=need_v,
+                    detail=f"при {need_f:,}+ подписчиков".replace(",", " "),
+                ))
 
     # --- «между порогами» ---------------------------------------------------
     margin = criteria.borderline_margin
@@ -120,6 +163,8 @@ def qualify(
     if current_index is not None and margin > 0:
         tier = atype.tiers[current_index]
         for metric in result.tier_met_by:
+            if metric not in tier.conditions:
+                continue  # составное условие «впритык» не оцениваем
             need = tier.conditions[metric]
             if values[metric] < need * (1 + margin):
                 reasons.append(
@@ -154,8 +199,53 @@ def qualify(
 # Рекомендация
 # --------------------------------------------------------------------------
 
+_REJECT = (
+    "Ни объёмы (критерий 1), ни соцсети (критерий 2) не проходят — заявка будет отклонена. "
+    "Спецсделка (критерий 3) — только case by case и с подписанным соглашением."
+)
+
+
 def _fmt_rate(value: Optional[float]) -> str:
     return "—" if value is None else f"{value:g}%"
+
+
+def _volume_lines(perf: "PerformanceResult", deal: DealProposal) -> tuple[list[str], bool]:
+    """Строки рекомендации по объёмам (критерий 1). -> (строки, критерий выполнен)."""
+    from .performance import best_rates
+
+    lines: list[str] = []
+    spot, futures, months = best_rates(perf)
+    ok = spot is not None or futures is not None
+    if ok:
+        deal.spot_rate, deal.futures_rate, deal.months, deal.basis = spot, futures, months, "volume"
+        parts = []
+        for name, market in (("Spot", perf.markets["spot"]), ("Futures", perf.markets["futures"])):
+            rate = spot if market.market == "spot" else futures
+            if rate is None:
+                continue
+            if market.needs_whitelist and rate == market.whitelist_rate:
+                fallback = (f"; без него — {market.auto_rate_full:g}% по автооценке"
+                            if market.auto_passed else "")
+                parts.append(f"{name} {rate:g}% на {market.whitelist_months} мес (whitelisting{fallback})")
+            else:
+                parts.append(f"{name} {rate:g}% (автооценка)")
+        source = (f" Объёмы с {perf.input.source_label} — приложить скриншоты из кабинета партнёра."
+                  if perf.input.external else "")
+        lines.append(f"По объёмам (критерий 1): {'; '.join(parts)}.{source}")
+    else:
+        lines.append("Объёмы не дотягивают до критерия 1 регламента.")
+    roi = perf.roi
+    if roi is not None and roi.roi is not None and roi.roi < 0:
+        lines.append(
+            f"ROI отрицательный ({roi.roi:.2f}): выплата партнёру больше комиссии биржи — "
+            "снизить ставку или фикс."
+        )
+    if roi is not None and roi.competitor and roi.vs_competitor < 0:
+        lines.append(
+            f"Конкурент платит партнёру на ${abs(roi.vs_competitor):,.0f} в месяц больше — "
+            "учесть в переговорах.".replace(",", " ")
+        )
+    return lines, ok
 
 
 def recommend(
@@ -164,38 +254,69 @@ def recommend(
     audience: AudienceAssessment,
     geo: GeoEstimate,
     criteria: Criteria,
+    perf: Optional["PerformanceResult"] = None,
 ) -> tuple[list[str], DealProposal]:
-    """Правила рекомендации. Решение остаётся за менеджером."""
+    """Правила рекомендации. Решение остаётся за менеджером.
+
+    С объёмами порядок как в регламенте: критерий 1 (объёмы) → критерий 2
+    (соцсети) → иначе отказ, спецсделка — case by case.
+    """
     days = criteria.test_period_days
     deal = DealProposal(
         rate=qual.tier_rate,
         test_period_days=days,
         review_metric=criteria.review_metric,
+        basis="social" if qual.tier_rate is not None else "none",
     )
     lines: list[str] = []
     codes = {f.code for f in flags}
     critical = [f for f in flags if f.severity == "critical"]
     conversion = audience.conversion.value if audience.available else "insufficient_data"
     airdrop = "airdrop_heavy" in codes
+    volume_lines, volume_ok = _volume_lines(perf, deal) if perf is not None else ([], False)
 
     if not qual.followers_single_platform and not qual.community_members:
-        deal.submit = False
-        lines.append(
-            "Данных по площадкам нет — проверьте ссылки и доступы (qualify config check). "
-            "Квалифицировать партнёра по этой карточке нельзя."
-        )
+        if not volume_lines:
+            deal.submit = False
+            lines.append(
+                "Данных по площадкам нет — проверьте ссылки и доступы (qualify config check). "
+                "Квалифицировать партнёра по этой карточке нельзя."
+            )
+            return lines, deal
+        deal.submit = volume_ok
+        lines.extend(volume_lines)
+        lines.append("Площадки не проверены — аудиторию оценить нельзя, проверьте ссылки и доступы.")
+        if not volume_ok:
+            lines.append(_REJECT)
         return lines, deal
 
+    # при критических флагах первой идёт строка «не подавать», объёмы — после неё
+    if not critical:
+        lines.extend(volume_lines)
+
     if qual.tier_rate is None:
-        deal.submit = False
         gap = ""
         if qual.next_tier_gaps:
             g = min(qual.next_tier_gaps, key=lambda x: x.missing)
             gap = f" — до минимального тира не хватает {g.missing:,} {METRIC_LABELS[g.metric]}".replace(",", " ")
-        lines.append(
-            f"Повышение ставки по критериям не обосновано: партнёр ниже минимального тира "
-            f"({_fmt_rate(qual.lowest_tier_rate)}){gap}. Базовые условия программы, вернуться при росте."
-        )
+        if volume_ok:
+            lines.append(
+                f"По соцсетям партнёр ниже минимального тира ({_fmt_rate(qual.lowest_tier_rate)}){gap} — "
+                "основание заявки только объёмы."
+            )
+            if critical:
+                deal.submit = False
+                names = ", ".join(sorted({f.code for f in critical}))
+                lines.insert(0, f"Не подавать на повышение до ручной проверки ({names}).")
+                lines.extend(volume_lines)
+        else:
+            deal.submit = False
+            lines.append(
+                f"Повышение ставки по критериям не обосновано: партнёр ниже минимального тира "
+                f"({_fmt_rate(qual.lowest_tier_rate)}){gap}. Базовые условия программы, вернуться при росте."
+            )
+            if perf is not None:
+                lines.append(_REJECT)
     elif critical:
         deal.submit = False
         names = ", ".join(sorted({f.code for f in critical}))
@@ -207,6 +328,13 @@ def recommend(
             f"Если проверка пройдена — старт на {_fmt_rate(qual.tier_rate)} на тестовый период "
             f"{days} дней, без CPA и фикса."
         )
+        lines.extend(volume_lines)
+    elif volume_ok:
+        lines.append(
+            f"Соцсети (критерий 2): {_fmt_rate(qual.tier_rate)} — дополнительное основание к объёмам."
+        )
+        if airdrop or conversion == "low":
+            lines.append("Аудитория слабо конвертируется в объём — смотреть на долю приступивших к торговле.")
     elif airdrop or conversion == "low":
         lines.append(
             f"Старт на {_fmt_rate(qual.tier_rate)} на тестовый период ({days} дней), без CPA и фикса. "
@@ -225,6 +353,8 @@ def recommend(
             "по доле торгующих и объёму."
         )
 
+    if perf is not None and not volume_ok and qual.tier_rate is not None:
+        lines.append(f"Основание заявки — соцсети (критерий 2): {_fmt_rate(qual.tier_rate)}.")
     if geo.needs_confirmation:
         lines.append("Перед подачей подтвердить гео у партнёра (скрин статистики аудитории).")
     if "inactive" in codes:

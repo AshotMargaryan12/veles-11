@@ -18,6 +18,7 @@ from .flags import EXPLANATIONS, EXPLANATIONS_EN
 from .llm import LLMClient, LLMError, write_draft_slots
 from .models import (
     INSUFFICIENT,
+    PerformanceResult,
     AudienceAssessment,
     DealProposal,
     Flag,
@@ -49,11 +50,14 @@ T = {
         "geo_unknown": "Geo: not determined — to be confirmed with the partner.",
         "confirm": ", to be confirmed with the partner",
         "tier": "Requested rate: {rate}% ({atype}).",
+        "tier_social": "Social-media tier: {rate}% ({atype}).",
+        "auto": "auto-evaluation", "whitelist": "whitelisting",
         "tier_none": "The partner does not meet the minimum tier ({rate}%) yet.",
         "criteria_met": "Criteria: {have} {metric} — meets the {rate}% tier threshold ({need}).",
         "criteria_gap": "{missing} {metric} short of the {rate}% tier ({need}).",
         "metric_followers": "followers on a single platform",
         "metric_community": "community members",
+        "metric_views": "average views per post",
         "cpa": "CPA for {geo}: {value} {cur} per {event}.",
         "cpa_none": "CPA for {geo}: no rate in the table.",
         "deal_hold": "Hold the rate increase until manual verification ({flags}). "
@@ -64,6 +68,17 @@ T = {
                     "if the share of trading users is confirmed.",
         "review": "Review after {days} days based on: {metric}.",
         "notes": "**Manager notes**",
+        "request_volume": "Commission request: {rates} (Criteria 1 — trading volume).",
+        "request_auto": "Commission request: {rates} — meets the auto-evaluation tier (Criteria 1 — trading volume).",
+        "request_social": "Commission request: {rate}% (Criteria 2 — social media).",
+        "months_n": "{n} months", "month_1": "1 month",
+        "volume": "Trading volume ({source}, per month): Spot {spot}, Futures {futures}; new traders: Spot {st}, Futures {ft}; FTT {ftt}.",
+        "volume_ext": "Volumes are from {source}: screenshots from the partner dashboard attached.",
+        "ours": "our exchange",
+        "roi": "Estimated monthly ROI: {roi} (exchange fees {rev} vs partner payout {cost}).",
+        "roi_ltv": " Including new-trader LTV: {roi}.",
+        "roi_comp": " Competitor offer: {comp}/month to the partner vs {ours}/month with us.",
+        "deal_volume": "{rates}; then re-evaluation on the actual volume and new traders.",
         "risks_none": "- No automatic risk flags; geo and audience quality are still to be "
                       "confirmed with the partner.",
         "manual": "[to be filled in manually]",
@@ -100,11 +115,14 @@ T = {
         "geo_unknown": "Гео не определено — подтвердить у партнёра.",
         "confirm": ", подтвердить у партнёра",
         "tier": "Запрашиваемая ставка: {rate}% ({atype}).",
+        "tier_social": "Тир по соцсетям: {rate}% ({atype}).",
+        "auto": "автооценка", "whitelist": "whitelisting",
         "tier_none": "Партнёр пока не проходит минимальный тир ({rate}%).",
         "criteria_met": "Критерии: {have} {metric} — порог тира {rate}% ({need}) выполнен.",
         "criteria_gap": "До тира {rate}% ({need}) не хватает {missing} {metric}.",
         "metric_followers": "подписчиков на одной площадке",
         "metric_community": "участников комьюнити",
+        "metric_views": "средних просмотров поста",
         "cpa": "CPA по гео {geo}: {value} {cur} за {event}.",
         "cpa_none": "CPA по гео {geo}: ставки в таблице нет.",
         "deal_hold": "Повышение отложить до ручной проверки ({flags}). Если проверка пройдена: "
@@ -115,6 +133,17 @@ T = {
                     "если доля торгующих подтвердится.",
         "review": "Пересмотр через {days} дней по: {metric}.",
         "notes": "**Заметки менеджера**",
+        "request_volume": "Запрос ставки: {rates} (критерий 1 — объёмы).",
+        "request_auto": "Запрос ставки: {rates} — проходит автооценку (критерий 1 — объёмы).",
+        "request_social": "Запрос ставки: {rate}% (критерий 2 — соцсети).",
+        "months_n": "{n} мес", "month_1": "1 мес",
+        "volume": "Объёмы ({source}, в месяц): Spot {spot}, Futures {futures}; новые трейдеры: Spot {st}, Futures {ft}; FTT {ftt}.",
+        "volume_ext": "Объёмы с {source}: скриншоты из кабинета партнёра приложены.",
+        "ours": "наша биржа",
+        "roi": "Оценка ROI в месяц: {roi} (комиссия бирже {rev} против выплаты партнёру {cost}).",
+        "roi_ltv": " С учётом LTV новых трейдеров: {roi}.",
+        "roi_comp": " Предложение конкурента: {comp}/мес партнёру против {ours}/мес у нас.",
+        "deal_volume": "{rates}; затем пересмотр по фактическим объёмам и новым трейдерам.",
         "risks_none": "- Автоматических флагов риска нет; гео и качество аудитории "
                       "подтвердить у партнёра.",
         "manual": "[заполнить вручную]",
@@ -232,16 +261,19 @@ def local_fields(
     notes: str,
     lang: str,
     now: datetime,
+    perf: Optional[PerformanceResult] = None,
 ) -> dict[str, str]:
     """Значения {{ПОЛЕЙ}} — всё, что считается по внутренним данным, только здесь."""
     t = _t(lang)
     metric_names = {
         "followers_single_platform": t["metric_followers"],
         "community_members": t["metric_community"],
+        "followers_with_views": t["metric_followers"],
     }
 
     if qual.tier_rate is not None:
-        tier_line = t["tier"].format(rate=f"{qual.tier_rate:g}", atype=t.get(qual.affiliate_type, qual.affiliate_type))
+        tier_key = "tier_social" if deal.basis == "volume" else "tier"
+        tier_line = t[tier_key].format(rate=f"{qual.tier_rate:g}", atype=t.get(qual.affiliate_type, qual.affiliate_type))
     else:
         tier_line = t["tier_none"].format(rate=f"{qual.lowest_tier_rate:g}" if qual.lowest_tier_rate else "—")
 
@@ -249,6 +281,7 @@ def local_fields(
     values = {
         "followers_single_platform": qual.followers_single_platform,
         "community_members": qual.community_members,
+        "followers_with_views": qual.followers_single_platform,
     }
     if qual.tier_rate is not None and qual.tier_met_by:
         metric = qual.tier_met_by[0]
@@ -257,8 +290,9 @@ def local_fields(
             rate=f"{qual.tier_rate:g}", need=num(qual.tier_thresholds.get(metric), lang),
         ))
     for gap in qual.next_tier_gaps[:2]:
+        gap_metric = t["metric_views"] if gap.metric == "followers_with_views" else metric_names[gap.metric]
         criteria.append(t["criteria_gap"].format(
-            missing=num(gap.missing, lang), metric=metric_names[gap.metric],
+            missing=num(gap.missing, lang), metric=gap_metric,
             rate=f"{qual.next_tier_rate:g}", need=num(gap.need, lang),
         ))
 
@@ -283,6 +317,10 @@ def local_fields(
     explanations = EXPLANATIONS_EN if lang == "en" else EXPLANATIONS
     risks = [f"- {f.code}: {explanations.get(f.code, f.explanation)}" for f in flags]
 
+    request_line, volume_line, roi_line = _volume_fields(perf, deal, qual, t, lang)
+    if deal.basis == "volume" and deal.submit:
+        deal_text = t["deal_volume"].format(rates=_rates_detail(perf, deal, t))
+
     return {
         "PARTNER_NAME": partner_name,
         "PARTNER_TYPE": t.get(qual.affiliate_type, qual.affiliate_type),
@@ -298,7 +336,73 @@ def local_fields(
         "REVIEW_TERMS": t["review"].format(days=deal.test_period_days, metric=deal.review_metric),
         "RISKS_LIST": "\n".join(risks) or t["risks_none"],
         "MANAGER_NOTES": f"\n{t['notes']}\n{notes.strip()}" if notes and notes.strip() else "",
+        "REQUEST_LINE": request_line,
+        "VOLUME_LINE": volume_line,
+        "ROI_LINE": roi_line,
     }
+
+
+def _months(n: Optional[int], t: dict) -> str:
+    if not n:
+        return ""
+    return t["month_1"] if n == 1 else t["months_n"].format(n=n)
+
+
+def _rates(deal: DealProposal) -> str:
+    parts = [f"{name} {rate:g}%" for name, rate in (("Spot", deal.spot_rate), ("Futures", deal.futures_rate))
+             if rate is not None]
+    return " / ".join(parts)
+
+
+def _rates_detail(perf: Optional[PerformanceResult], deal: DealProposal, t: dict) -> str:
+    """«Spot 41% (автооценка); Futures 50% на 1 мес (whitelisting)» — срок у каждого рынка свой."""
+    if perf is None:
+        return _rates(deal)
+    parts = []
+    for name, key, rate in (("Spot", "spot", deal.spot_rate), ("Futures", "futures", deal.futures_rate)):
+        if rate is None:
+            continue
+        market = perf.markets[key]
+        if market.needs_whitelist and rate == market.whitelist_rate:
+            parts.append(f"{name} {rate:g}%, {_months(market.whitelist_months, t)} ({t['whitelist']})")
+        else:
+            parts.append(f"{name} {rate:g}% ({t['auto']})")
+    return "; ".join(parts)
+
+
+def _usd(value: float, lang: str) -> str:
+    text = f"${value:,.0f}"
+    return text.replace(",", " ") if lang == "ru" else text
+
+
+def _volume_fields(perf: Optional[PerformanceResult], deal: DealProposal, qual: QualificationResult,
+                   t: dict, lang: str) -> tuple[str, str, str]:
+    """REQUEST_LINE, VOLUME_LINE, ROI_LINE — объёмы и ROI партнёра (внутренние данные)."""
+    if deal.basis == "volume":
+        request = t["request_volume"].format(rates=_rates_detail(perf, deal, t))
+    elif deal.basis == "social" and qual.tier_rate is not None and perf is not None:
+        request = t["request_social"].format(rate=f"{qual.tier_rate:g}")
+    else:
+        request = ""
+    if perf is None:
+        return request, "", ""
+    p = perf.input
+    source = p.source_label if p.external else t["ours"]
+    volume = t["volume"].format(
+        source=source, spot=_usd(p.spot_volume, lang), futures=_usd(p.futures_volume, lang),
+        st=p.spot_new_traders, ft=p.futures_new_traders, ftt=p.ftt,
+    )
+    if p.external:
+        volume += " " + t["volume_ext"].format(source=p.source_label)
+    roi_text = ""
+    roi = perf.roi
+    if roi is not None and roi.roi is not None:
+        roi_text = t["roi"].format(roi=f"{roi.roi:.2f}", rev=_usd(roi.revenue, lang), cost=_usd(roi.cost, lang))
+        if roi.roi_ltv is not None:
+            roi_text += t["roi_ltv"].format(roi=f"{roi.roi_ltv:.2f}")
+        if roi.competitor:
+            roi_text += t["roi_comp"].format(comp=_usd(roi.competitor_cost, lang), ours=_usd(roi.cost, lang))
+    return request, volume, roi_text
 
 
 def public_context(
@@ -406,9 +510,27 @@ def _justification(platforms: list[PlatformData], metrics: dict[str, PlatformMet
     return "\n".join(lines) or t["just_none"]
 
 
+_HEADING_RE = re.compile(r"^\*\*[^*]+\*\*\s*$")
+
+
+def _drop_empty_sections(text: str) -> str:
+    """Заголовок-строка «**...**», под которым пусто (поля не заполнены), убирается."""
+    lines = text.split("\n")
+    kept: list[str] = []
+    for i, line in enumerate(lines):
+        if _HEADING_RE.match(line):
+            rest = (l for l in lines[i + 1:] if l.strip())
+            nxt = next(rest, None)
+            if nxt is None or _HEADING_RE.match(nxt):
+                continue
+        kept.append(line)
+    return "\n".join(kept)
+
+
 def render(body: str, fields: dict[str, str], slots: dict[str, str]) -> str:
     text = _SLOT_RE.sub(lambda m: slots.get(m.group(1), m.group(0)), body)
     text = _FIELD_RE.sub(lambda m: fields.get(m.group(1), m.group(0)), text)
+    text = _drop_empty_sections(text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip() + "\n"
 
@@ -428,12 +550,16 @@ def build_draft(
     notes: str,
     lang: str,
     now: datetime,
+    perf: Optional[PerformanceResult] = None,
 ) -> tuple[str, str, Optional[str]]:
-    """-> (текст, источник слотов llm|local, ошибка LLM или None)."""
+    """-> (текст, источник слотов llm|local, ошибка LLM или None).
+
+    Объёмы и ROI (perf) идут только в локальные {{поля}}: в LLM их не отправляем.
+    """
     body, slots = parse_template(template)
     fields = local_fields(
         partner_name=partner_name, platforms=platforms, metrics=metrics, audience=audience,
-        geo=geo, qual=qual, deal=deal, flags=flags, notes=notes, lang=lang, now=now,
+        geo=geo, qual=qual, deal=deal, flags=flags, notes=notes, lang=lang, now=now, perf=perf,
     )
     slot_values = local_slots(
         slots, platforms=platforms, metrics=metrics, audience=audience, flags=flags, lang=lang,

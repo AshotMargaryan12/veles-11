@@ -174,7 +174,7 @@ def test_no_api_key_card_still_built(tmp_path):
     assert not card.audience.available
     assert "ANTHROPIC_API_KEY" in card.audience.error
     assert card.draft_source == "local"
-    assert card.qualification.tier_rate == 40
+    assert card.qualification.tier_rate == 38
     assert any("LLM-оценка не выполнена" in w for w in card.warnings)
 
 

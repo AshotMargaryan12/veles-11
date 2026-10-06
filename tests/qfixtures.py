@@ -8,46 +8,57 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Optional
 
-from qualifier.config import Settings, load_cpa, load_geo_profiles, load_thresholds, QualifierConfig, load_criteria
+from qualifier.config import (
+    QualifierConfig,
+    Settings,
+    load_cpa,
+    load_criteria,
+    load_geo_profiles,
+    load_thresholds,
+    load_volume_criteria,
+)
 from qualifier.models import ContentItem, PlatformData
 
 QNOW = datetime(2026, 10, 5, 12, 0, tzinfo=timezone.utc)
 REPO = Path(__file__).resolve().parents[1]
 
-# Пороги из раздела 7 ТЗ — только для тестов (в репозитории лежат вымышленные)
+# Тестовые пороги и ставки — ВЫМЫШЛЕННЫЕ, структура как в criteria.yaml.
+# Реальные внутренние числа в репозиторий не кладутся (раздел 11.5 ТЗ).
 SPEC_CRITERIA = """
 affiliate_types:
   individual:
     tiers:
-      - rate: 50
-        followers_single_platform: 15000
-        community_members: 10000
-      - rate: 40
-        followers_single_platform: 10000
-        community_members: 8000
-      - rate: 30
-        followers_single_platform: 5000
-        community_members: 3000
+      - rate: 48
+        followers_single_platform: 16000
+        community_members: 11000
+        followers_with_views: {followers: 400000, avg_views: 40000}
+      - rate: 38
+        followers_single_platform: 11000
+        community_members: 8500
+      - rate: 28
+        followers_single_platform: 6000
+        community_members: 3500
   institutional:
     tiers:
-      - rate: 50
-        followers_single_platform: 20000
-      - rate: 40
-        followers_single_platform: 15000
-      - rate: 30
-        followers_single_platform: 10000
+      - rate: 48
+        followers_single_platform: 22000
+      - rate: 38
+        followers_single_platform: 16000
+      - rate: 28
+        followers_single_platform: 11000
 cpa_rates_file: cpa_by_country.csv
 borderline_margin: 0.10
 """
 
 SPEC_CPA = """country_code,country,region,cpa,currency,event
-EG,Египет,MENA,11,USD,FTT
-RU,Россия,CIS,9,USD,FTT
-*,,MENA,6,USD,FTT
+EG,Египет,MENA,12,USD,FTT
+RU,Россия,CIS,7,USD,FTT
+*,,MENA,5,USD,FTT
 """
 
 
-def make_config_dir(tmp_path: Path, criteria: str = SPEC_CRITERIA, cpa: Optional[str] = SPEC_CPA) -> Path:
+def make_config_dir(tmp_path: Path, criteria: str = SPEC_CRITERIA, cpa: Optional[str] = SPEC_CPA,
+                    volume: bool = True) -> Path:
     config_dir = tmp_path / "qconfig"
     config_dir.mkdir()
     (config_dir / "criteria.yaml").write_text(criteria, encoding="utf-8")
@@ -56,6 +67,10 @@ def make_config_dir(tmp_path: Path, criteria: str = SPEC_CRITERIA, cpa: Optional
     src = REPO / "config" / "qualifier"
     for name in ("thresholds.yaml", "geo_markers.yaml"):
         (config_dir / name).write_text((src / name).read_text(encoding="utf-8"), encoding="utf-8")
+    if volume:
+        # пример с вымышленными числами — под именем «реального» файла
+        (config_dir / "volume_criteria.yaml").write_text(
+            (src / "volume_criteria.example.yaml").read_text(encoding="utf-8"), encoding="utf-8")
     return config_dir
 
 
@@ -80,6 +95,7 @@ def make_config(settings: Settings) -> QualifierConfig:
         thresholds=load_thresholds(settings.config_dir),
         geo=load_geo_profiles(settings.config_dir),
         templates_dir=Path(settings.templates_dir),
+        volume=load_volume_criteria(settings.config_dir),
     )
 
 

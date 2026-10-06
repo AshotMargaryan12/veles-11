@@ -13,6 +13,7 @@ service_account.json
 # В репозитории лежат лишь *.example.* с вымышленными числами.
 config/qualifier/criteria.yaml
 config/qualifier/cpa_by_country.csv
+config/qualifier/volume_criteria.yaml
 
 # Карточки квалификатора
 reports/

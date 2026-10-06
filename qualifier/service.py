@@ -20,6 +20,7 @@ from .geo import estimate_geo
 from .lang import detect_language
 from .links import parse_links
 from .llm import LLMClient, assess_audience
+from .performance import evaluate as evaluate_performance
 from .models import (
     PlatformData,
     PlatformMetrics,
@@ -157,13 +158,29 @@ class Qualifier:
         )
 
         flags = compute_flags(platforms, metrics, audience, th)
-        qual = qualify(platforms, cfg.criteria, cfg.cpa, geo, request.affiliate_type)
+        qual = qualify(platforms, cfg.criteria, cfg.cpa, geo, request.affiliate_type, metrics)
+
+        # объёмы партнёра (наша биржа или другая) — критерий 1 и ROI, только локально
+        perf = None
+        if request.performance is not None and not request.performance.empty:
+            if cfg.volume is None:
+                warnings.append(
+                    "объёмы указаны, но нет config/qualifier/volume_criteria.yaml — "
+                    "выполните qualify config import"
+                )
+            else:
+                perf = evaluate_performance(request.performance, cfg.volume)
+                if cfg.volume.is_example:
+                    warnings.append(
+                        "КРИТЕРИИ ПО ОБЪЁМАМ — ПРИМЕРЫ-ЗАГЛУШКИ. Импортируйте ROI-шаблон и регламент: "
+                        "qualify config import --roi ... --guidelines ..."
+                    )
         for data in (d for d in platforms if not d.ok):
             qual.manual_review_reasons.append(
                 f"{data.platform_title} {data.display_handle}: данные недоступны — {data.status_reason}"
             )
         qual.manual_review = bool(qual.manual_review_reasons)
-        lines, deal = recommend(qual, flags, audience, geo, cfg.criteria)
+        lines, deal = recommend(qual, flags, audience, geo, cfg.criteria, perf)
 
         primary = next((d for d in platforms if platform_key(d) == main_key), None)
         if primary is not None:
@@ -191,6 +208,7 @@ class Qualifier:
             notes=request.notes,
             lang=lang,
             now=now,
+            perf=perf,
         )
         if draft_error:
             warnings.append(f"черновик собран без LLM: {draft_error}")
@@ -233,6 +251,7 @@ class Qualifier:
             draft_source=draft_source,
             warnings=warnings,
             generated_at=now,
+            performance=perf,
         )
 
     # --- сохранение -----------------------------------------------------------

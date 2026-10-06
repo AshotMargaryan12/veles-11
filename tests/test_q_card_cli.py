@@ -92,12 +92,12 @@ def test_card_matches_spec_structure(tmp_path):
     assert "Тип аудитории: айрдроп-охотники с частью трейдеров" in md
     assert "Прогноз конверсии в объём: низкий" in md
     assert "Обоснование: преобладает контент про раздачи и клейм-поинты" in md
-    assert "Предполагаемый тир: 40%" in md
-    assert "До следующего тира (50%): не хватает 1 444 подписчиков на одной площадке" in md
-    assert "CPA по гео (EG): $11 за FTT" in md
+    assert "Предполагаемый тир: 38%" in md
+    assert "До следующего тира (48%): не хватает 2 444 подписчиков на одной площадке" in md
+    assert "CPA по гео (EG): $12 за FTT" in md
     assert "[!] airdrop_heavy — аудитория даёт регистрации, но слабо конвертируется в объём" in md
     assert "[!] brand_risk" in md
-    assert "Старт на 40% на тестовый период" in md
+    assert "Старт на 38% на тестовый период" in md
     assert "Квалификация предварительная, основана на публичных данных" in md
     assert "asks for 50%" in card.draft
     assert "**Subject:** Rate increase request" in card.draft
@@ -107,12 +107,12 @@ def test_json_and_csv_outputs(tmp_path):
     q = _qualifier(tmp_path)
     card = q.run(PartnerRequest(links=["t.me/crypto_masr"]))
     data = json.loads(render_json(card))
-    assert data["qualification"]["tier_rate"] == 40
+    assert data["qualification"]["tier_rate"] == 38
     assert data["platforms"][0]["metrics"]["er"] == 13.4
     assert data["geo"]["needs_confirmation"] is True
     assert "items" not in data["platforms"][0]
     row = card_csv_row(card)
-    assert row["tier"] == "40" and row["er"] == 13.4 and row["geo"] == "EG"
+    assert row["tier"] == "38" and row["er"] == 13.4 and row["geo"] == "EG"
 
 
 def test_draft_template_parsing():
@@ -129,8 +129,8 @@ def test_russian_draft(tmp_path):
     q = _qualifier(tmp_path, draft_language="ru")
     card = q.run(PartnerRequest(links=["t.me/crypto_masr"]))
     assert "**Тема:** Заявка на повышение ставки" in card.draft
-    assert "Запрашиваемая ставка: 40%" in card.draft
-    assert "до тира 50%" in card.draft.lower()
+    assert "Запрашиваемая ставка: 38%" in card.draft
+    assert "до тира 48%" in card.draft.lower()
 
 
 def test_platform_cache_and_refresh(tmp_path):
@@ -184,7 +184,7 @@ def test_history_saved(tmp_path):
     assert path is not None and path.exists()
     assert "ПАРТНЁР: Crypto Masr" in path.read_text(encoding="utf-8")
     rows = q.store.history(30)
-    assert rows[0]["tier"] == 40 and rows[0]["geo"] == "EG" and rows[0]["report_path"] == str(path)
+    assert rows[0]["tier"] == 38 and rows[0]["geo"] == "EG" and rows[0]["report_path"] == str(path)
 
 
 def test_batch_sorting():
@@ -306,12 +306,12 @@ def test_card_summary_tiles_and_verdict(tmp_path):
     q = _qualifier(tmp_path, responses=[AIRDROP, {"AUDIENCE_SUMMARY": "a", "JUSTIFICATION": "b", "RISKS": "c"}])
     summary = card_summary(q.run(PartnerRequest(links=["t.me/crypto_masr"])))
     tiles = {t["label"]: t for t in summary["tiles"]}
-    assert tiles["Предполагаемый тир"]["value"] == "40%"
-    assert tiles["Предполагаемый тир"]["note"] == "до 50%: −1 444 подписчиков"
+    assert tiles["Предполагаемый тир"]["value"] == "38%"
+    assert tiles["Предполагаемый тир"]["note"] == "до 48%: −2 444 подписчиков"
     assert tiles["Подписчики (макс.)"]["value"] == "13 556"
     assert tiles["ER по медиане"]["value"] == "13.4%"
     assert tiles["Гео"]["status"] == "warn"           # medium — подтвердить у партнёра
-    assert tiles["CPA по гео"]["value"] == "$11"
+    assert tiles["CPA по гео"]["value"] == "$12"
     assert summary["verdict"] == "warn"
     assert {f["code"] for f in summary["flags"]} == {"airdrop_heavy", "brand_risk"}
 

@@ -62,6 +62,36 @@ def _add_qualify_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--lang", choices=["en", "ru"], help="язык черновика заявки (по умолчанию DRAFT_LANGUAGE)")
 
 
+def _add_volume_options(parser: argparse.ArgumentParser) -> None:
+    """Объёмы партнёра — с нашей биржи или с другой. Всё в месяц, как в ROI-шаблоне."""
+    group = parser.add_argument_group(
+        "объёмы партнёра (в месяц; суммы можно писать как 1500000, 1.5M, 200k)")
+    group.add_argument("--volume-source", dest="source",
+                       help="откуда объёмы: пусто — наша биржа, иначе название другой (Bybit, OKX...)")
+    group.add_argument("--spot-volume", help="Spot-объём рефералов в месяц, $")
+    group.add_argument("--futures-volume", help="Futures-объём рефералов в месяц, $")
+    group.add_argument("--spot-traders", help="новых Spot-трейдеров в месяц")
+    group.add_argument("--futures-traders", help="новых Futures-трейдеров в месяц")
+    group.add_argument("--ftt", help="уникальных первых сделок (FTT) в месяц")
+    group.add_argument("--top-ftt", action="store_true", help="партнёр в топе по FTT своего региона")
+    group.add_argument("--upfront", help="фикс партнёру в месяц, $")
+    group.add_argument("--ltv", help="LTV нового трейдера, $")
+    group.add_argument("--spot-rate", help="ставка Spot для ROI вместо расчётной, %%")
+    group.add_argument("--futures-rate", help="ставка Futures для ROI вместо расчётной, %%")
+    group.add_argument("--comp-spot", help="ставка Spot у конкурента, %%")
+    group.add_argument("--comp-futures", help="ставка Futures у конкурента, %%")
+    group.add_argument("--comp-upfront", help="фикс у конкурента в месяц, $")
+
+
+def _performance(args: argparse.Namespace):
+    from .performance import PERFORMANCE_FIELDS, performance_from_mapping
+
+    values = {key: getattr(args, key, None) for key in PERFORMANCE_FIELDS}
+    if not values.get("top_ftt"):
+        values["top_ftt"] = None
+    return performance_from_mapping(values)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="qualify",
@@ -81,6 +111,7 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("--json", action="store_true", help="машиночитаемый вывод")
     check.add_argument("--csv", help="дописать строку карточки в CSV-файл")
     _add_qualify_options(check)
+    _add_volume_options(check)
 
     batch = sub.add_parser("batch", help="пакетный режим: файл со списком партнёров")
     batch.add_argument("file", help="одна строка — один партнёр: ссылки и geo=.. type=.. notes=\"..\"")
@@ -92,9 +123,15 @@ def build_parser() -> argparse.ArgumentParser:
     history.add_argument("--days", type=int, default=30)
     history.add_argument("--json", action="store_true")
 
-    config = sub.add_parser("config", help="проверка конфигов и доступов")
-    config.add_argument("action", choices=["check"])
-    config.add_argument("--offline", action="store_true", help="не проверять доступы по сети")
+    config = sub.add_parser("config", help="проверка конфигов и доступов; импорт внутренних файлов")
+    config.add_argument("action", choices=["check", "import"])
+    config.add_argument("--offline", action="store_true", help="check: не проверять доступы по сети")
+    config.add_argument("--cpa", help="import: таблица CPA по странам (xlsx)")
+    config.add_argument("--cpa-sheet", help="import: лист с CPA (по умолчанию — самый свежий квартал)")
+    config.add_argument("--cpa-column", help="import: колонка ставки (по умолчанию — со словом Affiliates)")
+    config.add_argument("--roi", help="import: ROI-шаблон (xlsx) — тиры по объёмам и комиссии")
+    config.add_argument("--guidelines", help="import: регламент whitelisting (docx)")
+    config.add_argument("--force", action="store_true", help="import: перезаписать существующие файлы")
 
     sub.add_parser("login", help="создать сессию Telegram (один раз)")
 
@@ -174,9 +211,14 @@ def cmd_check(args: argparse.Namespace) -> int:
     except ConfigError as exc:
         _err(f"Ошибка конфигурации: {exc}")
         return 2
+    try:
+        performance = _performance(args)
+    except ValueError as exc:
+        _err(f"Объёмы: {exc}")
+        return 2
     request = PartnerRequest(
         links=args.links, geo=args.geo, affiliate_type=args.affiliate_type,
-        notes=args.notes, refresh=args.refresh,
+        notes=args.notes, refresh=args.refresh, performance=performance,
     )
     try:
         card = qualifier.run(request)
@@ -358,6 +400,8 @@ def cmd_history(args: argparse.Namespace) -> int:
 
 
 def cmd_config(args: argparse.Namespace) -> int:
+    if args.action == "import":
+        return cmd_config_import(args)
     from .checks import run_checks
 
     settings = _settings(args)
@@ -369,6 +413,78 @@ def cmd_config(args: argparse.Namespace) -> int:
         _print(f"[{mark}] {title}" + (f" — {detail}" if detail else ""))
     _print("Готово к работе." if not errors else f"Ошибок: {errors}")
     return 1 if errors else 0
+
+
+def cmd_config_import(args: argparse.Namespace) -> int:
+    """Внутренние xlsx/docx -> локальные конфиги из .gitignore."""
+    import yaml
+
+    from . import importer
+
+    if not (args.cpa or args.roi or args.guidelines):
+        _err("Укажите хотя бы один файл: --cpa, --roi или --guidelines")
+        return 2
+    settings = _settings(args)
+    config_dir = Path(settings.config_dir)
+    config_dir.mkdir(parents=True, exist_ok=True)
+    targets = {
+        "cpa": config_dir / "cpa_by_country.csv",
+        "volume": config_dir / "volume_criteria.yaml",
+        "criteria": config_dir / "criteria.yaml",
+    }
+
+    def writable(path: Path) -> bool:
+        if path.exists() and not args.force:
+            _err(f"{path} уже есть — не трогаю. Перезаписать: --force")
+            return False
+        return True
+
+    def existing_yaml(path: Path) -> dict[str, Any]:
+        if path.exists():
+            return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        return {}
+
+    try:
+        roi = importer.import_roi(args.roi) if args.roi else None
+        guidelines = importer.import_guidelines(args.guidelines) if args.guidelines else None
+        cpa = importer.import_cpa(args.cpa, args.cpa_sheet, args.cpa_column) if args.cpa else None
+    except (ConfigError, OSError, KeyError, ValueError) as exc:
+        _err(f"Импорт не удался: {exc}")
+        return 2
+
+    written = 0
+    if cpa and writable(targets["cpa"]):
+        importer.write_cpa(targets["cpa"], cpa.rows, [Path(args.cpa).name, cpa.sheet])
+        _print(f"[✓] {targets['cpa']}: {len(cpa.rows)} стран, лист «{cpa.sheet}», колонка «{cpa.column}»"
+               + (f", пропущено строк без ставки: {cpa.skipped}" if cpa.skipped else ""))
+        written += 1
+
+    if (roi or guidelines) and writable(targets["volume"]):
+        if roi and guidelines:
+            for problem in importer.tier_mismatches(roi, guidelines):
+                _err(f"! расхождение: {problem}")
+        data = importer.build_volume_yaml(roi, guidelines, existing_yaml(targets["volume"]))
+        missing = [k for k in ("markets", "eligibility", "fees", "taker_share") if not data.get(k)]
+        if missing:
+            _err(f"! в volume_criteria.yaml не хватает: {', '.join(missing)} — "
+                 "добавьте --roi и --guidelines или допишите вручную по volume_criteria.example.yaml")
+        sources = [Path(p).name for p in (args.roi, args.guidelines) if p]
+        importer.write_yaml(targets["volume"], data, sources)
+        tiers = {m: len((data.get("markets") or {}).get(m, {}).get("tiers") or []) for m in ("spot", "futures")}
+        _print(f"[✓] {targets['volume']}: тиров spot {tiers['spot']}, futures {tiers['futures']}, "
+               f"правил whitelisting {len(data.get('eligibility') or [])}")
+        written += 1
+
+    if guidelines and guidelines.social and writable(targets["criteria"]):
+        data = importer.build_criteria_yaml(guidelines.social, existing_yaml(targets["criteria"]))
+        importer.write_yaml(targets["criteria"], data, [Path(args.guidelines).name])
+        kinds = ", ".join(f"{k} (тиров: {len(v['tiers'])})" for k, v in guidelines.social.items())
+        _print(f"[✓] {targets['criteria']}: {kinds}")
+        written += 1
+
+    if written:
+        _print("Файлы в .gitignore: в репозиторий и в LLM они не попадают. Проверить: qualify config check")
+    return 0 if written else 1
 
 
 def cmd_login(args: argparse.Namespace) -> int:

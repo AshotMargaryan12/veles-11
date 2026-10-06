@@ -32,14 +32,14 @@ def test_spec_example_tier_gap_and_cpa(cfg):
     criteria, cpa = cfg
     yt = PlatformData(platform="youtube", handle="x", url="", followers=4200)
     result = qualify([tg_data(followers=13556, members=1200), yt], criteria, cpa, geo())
-    assert result.tier_rate == 40
+    assert result.tier_rate == 38
     assert result.tier_met_by == ["followers_single_platform"]
     assert result.followers_platform == "telegram"
-    assert result.next_tier_rate == 50
+    assert result.next_tier_rate == 48
     gaps = {g.metric: g.missing for g in result.next_tier_gaps}
-    assert gaps["followers_single_platform"] == 1444     # как в примере карточки ТЗ
-    assert gaps["community_members"] == 8800
-    assert (result.cpa, result.cpa_currency, result.cpa_event) == (11, "USD", "FTT")
+    assert gaps["followers_single_platform"] == 2444
+    assert gaps["community_members"] == 9800
+    assert (result.cpa, result.cpa_currency, result.cpa_event) == (12, "USD", "FTT")
     assert not result.criteria_are_examples
 
 
@@ -48,13 +48,13 @@ def test_followers_are_not_summed_across_platforms(cfg):
     a = tg_data(handle="aaaaa", followers=9000)
     b = PlatformData(platform="youtube", handle="b", url="", followers=9000)
     result = qualify([a, b], criteria, cpa, geo())
-    assert result.tier_rate == 30  # 9 000 на одной площадке, а не 18 000 в сумме
+    assert result.tier_rate == 28  # 9 000 на одной площадке, а не 18 000 в сумме
 
 
 def test_community_members_can_qualify(cfg):
     criteria, cpa = cfg
     result = qualify([tg_data(followers=4000, members=8500)], criteria, cpa, geo())
-    assert result.tier_rate == 40
+    assert result.tier_rate == 38
     assert result.tier_met_by == ["community_members"]
     assert "чат обсуждений" in result.community_source
 
@@ -62,8 +62,8 @@ def test_community_members_can_qualify(cfg):
 def test_institutional_type(cfg):
     criteria, cpa = cfg
     result = qualify([tg_data(followers=13556)], criteria, cpa, geo(), "institutional")
-    assert result.tier_rate == 30
-    assert result.next_tier_rate == 40
+    assert result.tier_rate == 28
+    assert result.next_tier_rate == 38
 
 
 def test_unknown_affiliate_type(cfg):
@@ -76,32 +76,32 @@ def test_below_minimum_tier(cfg):
     criteria, cpa = cfg
     result = qualify([tg_data(followers=2000, members=100)], criteria, cpa, geo())
     assert result.tier_rate is None
-    assert result.next_tier_rate == 30
-    assert {g.metric: g.missing for g in result.next_tier_gaps}["followers_single_platform"] == 3000
+    assert result.next_tier_rate == 28
+    assert {g.metric: g.missing for g in result.next_tier_gaps}["followers_single_platform"] == 4000
 
 
 def test_borderline_requires_manual_review(cfg):
     criteria, cpa = cfg
-    near_next = qualify([tg_data(followers=14200)], criteria, cpa, geo(confidence="high"))
+    near_next = qualify([tg_data(followers=14600)], criteria, cpa, geo(confidence="high"))
     assert near_next.manual_review
     assert any("между порогами" in r for r in near_next.manual_review_reasons)
-    just_made = qualify([tg_data(followers=10300)], criteria, cpa, geo(confidence="high"))
+    just_made = qualify([tg_data(followers=11300)], criteria, cpa, geo(confidence="high"))
     assert any("впритык" in r for r in just_made.manual_review_reasons)
-    clear = qualify([tg_data(followers=12500, members=100)], criteria, cpa, geo(confidence="high"))
+    clear = qualify([tg_data(followers=13000, members=100)], criteria, cpa, geo(confidence="high"))
     assert not clear.manual_review
 
 
 def test_low_geo_confidence_requires_manual_review(cfg):
     criteria, cpa = cfg
-    result = qualify([tg_data(followers=12500, members=100)], criteria, cpa, geo(confidence="low"))
+    result = qualify([tg_data(followers=13000, members=100)], criteria, cpa, geo(confidence="low"))
     assert "гео определено с низкой уверенностью" in result.manual_review_reasons
 
 
 def test_cpa_regional_fallback_and_missing(cfg):
     criteria, cpa = cfg
-    regional = qualify([tg_data(followers=12500)], criteria, cpa, geo("SA", "high", "MENA"))
-    assert regional.cpa == 6 and regional.cpa_matched_by == "region"
-    missing = qualify([tg_data(followers=12500)], criteria, cpa, geo("BR", "high", "LATAM"))
+    regional = qualify([tg_data(followers=13000)], criteria, cpa, geo("SA", "high", "MENA"))
+    assert regional.cpa == 5 and regional.cpa_matched_by == "region"
+    missing = qualify([tg_data(followers=13000)], criteria, cpa, geo("BR", "high", "LATAM"))
     assert missing.cpa is None
     assert any("нет CPA-ставки" in r for r in missing.manual_review_reasons)
 
@@ -110,7 +110,7 @@ def test_match_all(tmp_path):
     config_dir = make_config_dir(tmp_path, SPEC_CRITERIA.replace("individual:\n    tiers:", "individual:\n    match: all\n    tiers:"))
     criteria = load_criteria(config_dir)
     cpa = load_cpa(config_dir)
-    result = qualify([tg_data(followers=16000, members=500)], criteria, cpa, geo())
+    result = qualify([tg_data(followers=17000, members=500)], criteria, cpa, geo())
     assert result.tier_rate is None  # подписчиков хватает, комьюнити — нет
 
 
@@ -155,7 +155,7 @@ def _audience(conversion="medium", audience="traders"):
     )
 
 
-def _rec(cfg, followers=12500, flags=(), audience=None, g=None):
+def _rec(cfg, followers=13000, flags=(), audience=None, g=None):
     criteria, cpa = cfg
     g = g or geo(confidence="high")
     q = qualify([tg_data(followers=followers, members=100)], criteria, cpa, g)
@@ -164,7 +164,7 @@ def _rec(cfg, followers=12500, flags=(), audience=None, g=None):
 
 def test_recommendation_airdrop_matches_spec(cfg):
     lines, deal = _rec(cfg, flags=[Flag("airdrop_heavy", "x")], audience=_audience("low", "airdrop_hunters"))
-    assert lines[0].startswith("Старт на 40% на тестовый период")
+    assert lines[0].startswith("Старт на 38% на тестовый период")
     assert "без CPA и фикса" in lines[0]
     assert "доля приступивших к торговле" in lines[0] or "долю приступивших к торговле" in lines[0]
     assert deal.submit and not deal.cpa_included
@@ -178,7 +178,7 @@ def test_recommendation_blocked_by_critical_flag(cfg):
 
 def test_recommendation_high_conversion_with_cpa(cfg):
     lines, deal = _rec(cfg, audience=_audience("high"), g=geo("EG", "high"))
-    assert lines[0].startswith("Подавать на 40%")
+    assert lines[0].startswith("Подавать на 38%")
     assert "CPA" in lines[0]
     assert deal.cpa_included
 
