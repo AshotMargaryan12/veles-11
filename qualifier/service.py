@@ -44,11 +44,13 @@ class BudgetExceeded(RuntimeError):
 
 def default_collectors(settings: Settings) -> dict[str, Any]:
     from .platforms.telegram import TelegramCollector
+    from .platforms.telegram_web import TelegramWebCollector
     from .platforms.x import XCollector
     from .platforms.youtube import YouTubeCollector
 
+    web = TelegramWebCollector(settings) if settings.tg_web_fallback else None
     return {
-        "telegram": TelegramCollector(settings),
+        "telegram": TelegramCollector(settings, web_fallback=web),
         "youtube": YouTubeCollector(settings),
         "x": XCollector(settings),
     }

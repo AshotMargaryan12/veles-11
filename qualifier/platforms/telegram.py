@@ -103,11 +103,14 @@ def _status(ref: PlatformRef, status: str, reason: str) -> PlatformData:
 class TelegramCollector:
     platform = PLATFORM_TELEGRAM
 
-    def __init__(self, settings: Settings, gateway_factory: Optional[Callable[[], Any]] = None):
+    def __init__(self, settings: Settings, gateway_factory: Optional[Callable[[], Any]] = None,
+                 web_fallback: Any = None):
         self.settings = settings
         self._factory = gateway_factory or self._default_gateway
         self._gateway: Any = None
         self._unavailable: Optional[str] = None
+        # без сессии — публичная веб-страница канала (TelegramWebCollector)
+        self.web_fallback = web_fallback
         self.fetched = 0
 
     # --- шлюз ------------------------------------------------------------
@@ -148,11 +151,15 @@ class TelegramCollector:
 
     def collect(self, ref: PlatformRef) -> PlatformData:
         if not self.settings.telegram_configured:
+            if self.web_fallback is not None:
+                return self.web_fallback.collect(ref)
             return _status(
                 ref, STATUS_UNAVAILABLE,
                 "не заданы TG_API_ID / TG_API_HASH в .env — Telegram не опрашивается",
             )
         if self._unavailable:
+            if self.web_fallback is not None:
+                return self.web_fallback.collect(ref)
             return _status(ref, STATUS_UNAVAILABLE, self._unavailable)
 
         from tghunter.tg import TelegramUnavailable
@@ -161,6 +168,9 @@ class TelegramCollector:
             gateway = self.gateway()
         except TelegramUnavailable as exc:
             self._unavailable = str(exc)
+            if self.web_fallback is not None:
+                log.warning("Telegram-сессия недоступна (%s) — читаю публичную веб-страницу", exc)
+                return self.web_fallback.collect(ref)
             return _status(ref, STATUS_UNAVAILABLE, self._unavailable)
 
         self.fetched += 1

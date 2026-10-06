@@ -143,3 +143,16 @@ def test_no_signals_returns_unknown(profiles):
     geo = estimate_geo([], detect_language([]), profiles)
     assert geo.country is None
     assert geo.confidence == "low"
+
+
+def test_latin_markers_match_whole_words(profiles):
+    texts = ["New payments infrastructure for crypto users across the market"] * 3
+    geo = estimate_geo(texts, _lang(texts), profiles)
+    assert geo.country is None               # «payme» не находится в «payments»
+
+
+def test_english_without_signals_is_not_determined(profiles):
+    texts = ["Market update: bitcoin is up and altcoins follow the trend"] * 6
+    geo = estimate_geo(texts, _lang(texts), profiles)
+    assert geo.country is None and geo.confidence == "low"
+    assert geo.needs_confirmation

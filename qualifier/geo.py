@@ -25,6 +25,8 @@ LLM_WEIGHT = 2.0
 MARKER_DISTINCT_WEIGHT = 1.2
 MARKER_POST_WEIGHT = 0.3
 MARKER_CAP = 5.0
+# меньше этого — сигналов слишком мало, страну не называем (например, англоязычный канал)
+MIN_SCORE = 1.0
 
 
 @lru_cache(maxsize=4096)
@@ -32,9 +34,12 @@ def _marker_regex(marker: str) -> re.Pattern[str]:
     if marker.startswith("re:"):
         return re.compile(marker[3:], re.IGNORECASE)
     clean = marker.strip()
-    short_word = len(clean) <= 4 and re.fullmatch(r"[A-Za-zА-Яа-яЁёІіЇїЄєҐґЎў'.]+", clean)
+    if re.fullmatch(r"[A-Za-z0-9 .'\-]+", clean):
+        # латиница — целым словом: «payme» не должен находиться в «payments»
+        return re.compile(r"(?<!\w)" + re.escape(clean) + r"(?!\w)", re.IGNORECASE)
+    short_word = len(clean) <= 4 and re.fullmatch(r"[А-Яа-яЁёІіЇїЄєҐґЎў'.]+", clean)
     if short_word:
-        # короткие маркеры — с начала слова: «сбер» найдёт «сбербанк», «дия» не найдёт «индия»
+        # короткие кириллические основы — с начала слова: «сбер» найдёт «сбербанк», «дия» не найдёт «индия»
         return re.compile(r"(?<!\w)" + re.escape(clean), re.IGNORECASE)
     return re.compile(re.escape(marker), re.IGNORECASE)
 
@@ -141,6 +146,9 @@ def estimate_geo(
 
     ranked = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
     best, top = ranked[0]
+    if top < MIN_SCORE:
+        return GeoEstimate(confidence="low", signals=signals,
+                           alternatives=[(code, round(value, 2)) for code, value in ranked[:3]])
     second = ranked[1][1] if len(ranked) > 1 else 0.0
     best_signals = [s for s in signals if s.country == best]
     kinds = {s.kind for s in best_signals}

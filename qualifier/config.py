@@ -64,6 +64,7 @@ class Settings:
     tg_session_name: str = "qualifier"
     tg_session_dir: str = "sessions"
     tg_posts_limit: int = 50
+    tg_web_fallback: bool = True      # без сессии читать публичную страницу t.me
     rate_min_interval: float = 2.0
     rate_max_interval: float = 3.0
     floodwait_abort_streak: int = 2
@@ -111,6 +112,7 @@ def load_settings(env_file: Optional[str] = None) -> Settings:
         tg_session_name=_env("TG_SESSION_NAME", "qualifier"),
         tg_session_dir=_env("TG_SESSION_DIR", "sessions"),
         tg_posts_limit=_env_int("TG_POSTS_LIMIT", 50),
+        tg_web_fallback=_env("TG_WEB_FALLBACK", "1").lower() not in ("0", "false", "no", "off"),
         rate_min_interval=_env_float("RATE_MIN_INTERVAL", 2.0),
         rate_max_interval=_env_float("RATE_MAX_INTERVAL", 3.0),
         floodwait_abort_streak=_env_int("FLOODWAIT_ABORT_STREAK", 2),
