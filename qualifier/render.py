@@ -318,6 +318,72 @@ def render_markdown(card: Card, template: Optional[str] = None) -> str:
 
 
 # --------------------------------------------------------------------------
+# Сводка для веб-интерфейса: плитки показателей и статусы
+# --------------------------------------------------------------------------
+
+def card_summary(card: Card) -> dict[str, Any]:
+    """Короткая выжимка карточки для плиток и чипов на веб-странице."""
+    q = card.qualification
+    m = card.primary_metrics
+    primary = card.primary
+
+    if not q.followers_single_platform and not q.community_members:
+        tier, tier_note = "нет данных", "площадки недоступны"
+    elif q.tier_rate is None:
+        tier = "ниже тира"
+        tier_note = f"минимальный — {q.lowest_tier_rate:g}%" if q.lowest_tier_rate is not None else ""
+    else:
+        tier, tier_note = f"{q.tier_rate:g}%", "максимальный тир"
+    if q.next_tier_rate is not None and q.next_tier_gaps:
+        gap = min(q.next_tier_gaps, key=lambda g: g.missing / max(g.need, 1))
+        short = {"followers_single_platform": "подписчиков", "community_members": "в комьюнити"}
+        tier_note = f"до {q.next_tier_rate:g}%: −{num(gap.missing)} {short[gap.metric]}"
+
+    geo = card.geo
+    if not geo.country:
+        geo_value, geo_status, geo_note = "не определено", "warn", "подтвердить у партнёра"
+    elif geo.source == "manual":
+        geo_value, geo_status, geo_note = geo.country_name, "good", "указано менеджером"
+    else:
+        geo_value = geo.country_name
+        geo_status = "good" if geo.confidence == "high" else "warn"
+        geo_note = f"уверенность {geo.confidence}" + (" — подтвердить" if geo.needs_confirmation else "")
+
+    critical = any(f.severity == "critical" for f in card.flags)
+    if not card.deal.submit or critical:
+        verdict = "critical"
+    elif card.flags or q.manual_review:
+        verdict = "warn"
+    else:
+        verdict = "good"
+
+    return {
+        "partner": card.partner_name,
+        "handle": card.partner_handle,
+        "platforms": platforms_line(card),
+        "tiles": [
+            {"label": "Предполагаемый тир", "value": tier, "note": tier_note},
+            {"label": "Подписчики (макс.)", "value": num(q.followers_single_platform) if q.followers_single_platform else "—",
+             "note": platform_label(primary) if primary else ""},
+            {"label": "ER по медиане", "value": f"{m.er}%" if m and m.er is not None else "—",
+             "note": f"медиана {num(m.median_views)} просм." if m and m.median_views is not None else ""},
+            {"label": "Гео", "value": geo_value, "note": geo_note, "status": geo_status},
+            {"label": "CPA по гео", "value": _money(q.cpa, q.cpa_currency) if q.cpa is not None else "—",
+             "note": f"за {q.cpa_event}" if q.cpa is not None else "ставки нет"},
+        ],
+        "flags": [
+            {"code": f.code, "severity": f.severity, "explanation": f.explanation, "evidence": f.evidence}
+            for f in card.flags
+        ],
+        "manual_review": q.manual_review,
+        "manual_review_reasons": q.manual_review_reasons,
+        "verdict": verdict,
+        "recommendation": card.recommendation,
+        "warnings": card.warnings,
+    }
+
+
+# --------------------------------------------------------------------------
 # JSON и CSV
 # --------------------------------------------------------------------------
 

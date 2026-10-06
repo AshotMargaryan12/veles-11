@@ -298,3 +298,28 @@ def test_web_requires_token_and_qualifies(demo_env):
     assert bad.status_code == 400
     history = client.get("/api/history").json()
     assert history and history[0]["partner"].startswith("Фьючерсы")
+
+
+def test_card_summary_tiles_and_verdict(tmp_path):
+    from qualifier.render import card_summary
+
+    q = _qualifier(tmp_path, responses=[AIRDROP, {"AUDIENCE_SUMMARY": "a", "JUSTIFICATION": "b", "RISKS": "c"}])
+    summary = card_summary(q.run(PartnerRequest(links=["t.me/crypto_masr"])))
+    tiles = {t["label"]: t for t in summary["tiles"]}
+    assert tiles["Предполагаемый тир"]["value"] == "40%"
+    assert tiles["Предполагаемый тир"]["note"] == "до 50%: −1 444 подписчиков"
+    assert tiles["Подписчики (макс.)"]["value"] == "13 556"
+    assert tiles["ER по медиане"]["value"] == "13.4%"
+    assert tiles["Гео"]["status"] == "warn"           # medium — подтвердить у партнёра
+    assert tiles["CPA по гео"]["value"] == "$11"
+    assert summary["verdict"] == "warn"
+    assert {f["code"] for f in summary["flags"]} == {"airdrop_heavy", "brand_risk"}
+
+
+def test_web_page_uses_binance_palette_and_safe_dom():
+    from qualifier.web import PAGE
+
+    assert "#FCD535" in PAGE and "#0B0E11" in PAGE      # жёлтый акцент и тёмный фон
+    assert 'data-theme="light"' in PAGE                 # светлая тема переключателем
+    # данные каналов вставляются только через textContent
+    assert "innerHTML" not in PAGE
