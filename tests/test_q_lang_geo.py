@@ -156,3 +156,10 @@ def test_english_without_signals_is_not_determined(profiles):
     geo = estimate_geo(texts, _lang(texts), profiles)
     assert geo.country is None and geo.confidence == "low"
     assert geo.needs_confirmation
+
+
+def test_single_travel_mention_does_not_override_language(profiles):
+    texts = ["Разбор рынка: биткоин растёт, что делать трейдерам сейчас"] * 8
+    texts.append("Вернулся из тура по восточному Казахстану, видео будет в инсте")
+    geo = estimate_geo(texts, _lang(texts), profiles)
+    assert geo.country == "RU"

@@ -46,7 +46,9 @@ _REF_PARAMS = {
     "clickid", "click_id", "sub_id", "subid", "code", "r",
 }
 # Пути реферальных ссылок бирж: /register?ref=..., /invite/XXXX, /join/XXXX
-_REF_PATH = re.compile(r"/(?:invite|referral|ref|join|r)/[A-Za-z0-9_-]{3,}", re.IGNORECASE)
+_REF_PATH = re.compile(r"/(?:invite|referral|ref|join|r|b)/[A-Za-z0-9_-]{3,}", re.IGNORECASE)
+# партнёрские поддомены бирж: partner.bybit.com/b/<код>, affiliate.<биржа>...
+_REF_HOSTS = ("partner.", "partners.", "affiliate.", "affiliates.", "ref.", "invite.")
 
 # Биржи и сервисы: реферальная ссылка на них — «реферальная активность на биржи»
 EXCHANGE_DOMAINS = (
@@ -81,7 +83,7 @@ def _url_markers(url: str) -> tuple[list[str], bool]:
         ref_hits -= {"code", "r"}
     if ref_hits:
         markers.append("ref-ссылка")
-    elif is_exchange and _REF_PATH.search(parsed.path or ""):
+    elif is_exchange and (_REF_PATH.search(parsed.path or "") or host.startswith(_REF_HOSTS)):
         markers.append("ref-ссылка")
     exchange_ref = is_exchange and "ref-ссылка" in markers
     return markers, exchange_ref

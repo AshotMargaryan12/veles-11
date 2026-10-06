@@ -125,6 +125,9 @@ def estimate_geo(
             MARKER_CAP,
             MARKER_DISTINCT_WEIGHT * len(hits) + MARKER_POST_WEIGHT * min(posts_with_hits, 5),
         )
+        if len(hits) == 1 and posts_with_hits == 1:
+            # одно упоминание в одном посте (например, рассказ о поездке) — слабый сигнал
+            value *= 0.5
         scores[code] += value
         shown = ", ".join(_display_marker(m) for m in list(hits)[:5])
         signals.append(

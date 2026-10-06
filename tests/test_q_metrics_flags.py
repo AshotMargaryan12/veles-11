@@ -198,3 +198,9 @@ def test_primary_key_prefers_largest_channel():
     assert primary_key([small, group, big]) == "telegram:big_one"
     assert primary_key([PlatformData(platform="x", handle="a", url="", status="unavailable")]) is None
     assert INSUFFICIENT == "insufficient_data"
+
+
+def test_exchange_partner_subdomain_is_referral():
+    scan = scan_post("Держу на бирже, скрин оттуда https://partner.bybit.com/b/SOMECODE (бонус за регистрацию)")
+    assert scan.is_ad and scan.exchange_ref
+    assert not scan_post("Новости https://www.bybit.com/en/announcement-info/123").exchange_ref
