@@ -171,7 +171,8 @@ def _qualifier(tmp_path, data=None, responses=None):
 
 
 def test_card_with_volumes(tmp_path):
-    q = _qualifier(tmp_path)
+    # по соцсетям 28%, по объёмам 35% — основание заявки объёмы
+    q = _qualifier(tmp_path, data={"good_channel": tg_data(followers=7000)})
     perf = PerformanceInput(source="Bybit", spot_volume=1_100_000, spot_new_traders=3,
                             futures_volume=7_000_000, top_ftt_region=True)
     card = q.run(PartnerRequest(links=["t.me/good_channel"], performance=perf))
@@ -183,7 +184,8 @@ def test_card_with_volumes(tmp_path):
     assert "ОБЪЁМЫ И ROI" in md and "Источник объёмов: Bybit" in md
     assert "Commission request: Spot 35%, 3 months (whitelisting)" in card.draft
     assert "Trading volume (Bybit, per month)" in card.draft
-    assert "Social-media tier: 38%" in card.draft
+    assert "Social-media tier: 28%" in card.draft
+    assert any("Соцсети (критерий 2): 28% — дополнительное основание" in l for l in card.recommendation)
     summary = card_summary(card)
     assert [t["value"] for t in summary["volumes"]["tiles"][:2]] == ["35%", "35%"]
 
@@ -304,3 +306,26 @@ def test_web_accepts_volumes(tmp_path):
     bad = client.post("/api/qualify?token=t", json={"links": "t.me/good_channel",
                                                     "performance": {"spot_volume": "много"}})
     assert bad.status_code == 400 and "объёмы" in bad.json()["error"]
+
+
+def test_market_line_wording(vc):
+    from qualifier.performance import market_line
+
+    # автооценка 25%, whitelisting выше — «не нужен» писать нельзя
+    m = evaluate(PerformanceInput(spot_volume=1_100_000, spot_new_traders=3), vc).markets["spot"]
+    line = market_line(m, 3)
+    assert "whitelisting даёт 35% на 3 мес" in line and "не нужен" not in line
+    m = evaluate(PerformanceInput(spot_volume=1_200_000, spot_new_traders=5), vc).markets["spot"]
+    assert "whitelisting не нужен" in market_line(m, 3)
+
+
+def test_social_wins_when_higher_than_volumes(tmp_path):
+    # соцсети дают 38%, объёмы — только 25% по автооценке: основание заявки — соцсети
+    q = _qualifier(tmp_path)
+    perf = PerformanceInput(spot_volume=150_000, spot_new_traders=2)
+    card = q.run(PartnerRequest(links=["t.me/good_channel"], performance=perf))
+    assert card.deal.basis == "social" and card.deal.spot_rate is None
+    assert card.recommendation[0].startswith("Объёмы (критерий 1) дают меньше, чем соцсети: Spot 25%")
+    assert any("Основание заявки — соцсети (критерий 2): 38%" in line for line in card.recommendation)
+    assert not any("дополнительное основание" in line for line in card.recommendation)
+    assert "Commission request: 38% (Criteria 2 — social media)" in card.draft

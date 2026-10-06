@@ -274,6 +274,15 @@ def recommend(
     conversion = audience.conversion.value if audience.available else "insufficient_data"
     airdrop = "airdrop_heavy" in codes
     volume_lines, volume_ok = _volume_lines(perf, deal) if perf is not None else ([], False)
+    if volume_ok and qual.tier_rate is not None:
+        best_volume = max(r for r in (deal.spot_rate, deal.futures_rate) if r is not None)
+        if qual.tier_rate > best_volume:
+            # соцсети дают больше — основание заявки они, объёмы остаются справкой
+            volume_lines[0] = volume_lines[0].replace(
+                "По объёмам (критерий 1): ", "Объёмы (критерий 1) дают меньше, чем соцсети: ", 1)
+            deal.spot_rate = deal.futures_rate = deal.months = None
+            deal.basis = "social"
+            volume_ok = False
 
     if not qual.followers_single_platform and not qual.community_members:
         if not volume_lines:

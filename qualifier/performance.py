@@ -208,11 +208,11 @@ def market_line(m: MarketResult, months: int) -> str:
         return f"{title}: объёмов нет"
     head = (f"{title}: {_money(m.volume_month)}/мес → {_money(m.volume_period)} за {months} мес, "
             f"новых трейдеров {m.new_traders_period}" + (" (по FTT)" if m.ftt_used else ""))
-    if m.auto_passed:
+    if m.auto_passed and m.needs_whitelist:
+        verdict = (f"проходит автооценку на {m.auto_rate_full:g}%; whitelisting даёт "
+                   f"{m.whitelist_rate:g}% на {m.whitelist_months} мес ({m.whitelist_basis})")
+    elif m.auto_passed:
         verdict = f"проходит автооценку на {m.auto_rate_full:g}% — whitelisting не нужен"
-        if m.whitelist_rate and m.whitelist_rate > m.auto_rate_full:
-            verdict += (f"; whitelisting до {m.whitelist_rate:g}% на {m.whitelist_months} мес "
-                        f"({m.whitelist_basis})")
     elif m.whitelist_rate is not None:
         verdict = f"whitelisting {m.whitelist_rate:g}% на {m.whitelist_months} мес ({m.whitelist_basis})"
         if m.alternative:
