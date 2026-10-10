@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b1a33" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Дашулечке из Батуми</title>
+    <meta name="description" content="Открой, когда будет минутка. Тут кое-что для тебя." />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Дашулечке из Батуми" />
+    <meta property="og:description" content="Открой, когда будет минутка. Тут кое-что для тебя." />
+    <meta property="og:image" content="https://ashotmargaryan12.github.io/veles-11/og.jpg" />
+    <meta property="og:url" content="https://ashotmargaryan12.github.io/veles-11/" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Manrope:wght@400;600;800&display=swap"
+    />
+    <script type="module" crossorigin src="./assets/index-Jl_8KeJa.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-BWzcz6K0.css">
+  </head>
+  <body>
+    <main>
+      <!-- 1. Первый экран: вечерний Батуми и таймер -->
+      <section class="hero" id="top">
+        <canvas class="hero__sky" aria-hidden="true"></canvas>
+        <div class="hero__content">
+          <p class="hero__address" data-t="hero.address"></p>
+          <h1 class="hero__title" data-t="hero.title"></h1>
+          <p class="hero__together" data-t="hero.togetherLabel"></p>
+          <div class="timer" role="timer" aria-atomic="true">
+            <div class="timer__cell"><span class="timer__num" data-unit="days">0</span><span class="timer__label" data-label="days"></span></div>
+            <div class="timer__cell"><span class="timer__num" data-unit="hours">00</span><span class="timer__label" data-label="hours"></span></div>
+            <div class="timer__cell"><span class="timer__num" data-unit="minutes">00</span><span class="timer__label" data-label="minutes"></span></div>
+            <div class="timer__cell"><span class="timer__num" data-unit="seconds">00</span><span class="timer__label" data-label="seconds"></span></div>
+          </div>
+          <p class="hero__phrase"></p>
+          <p class="hero__when"></p>
+          <p class="hero__your-time"></p>
+        </div>
+        <a class="hero__scroll" href="#photos">
+          <span data-t="hero.scrollHint"></span>
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 9c2.5 2.6 4.8 4.7 7 6.5 2.3-1.9 4.6-4 7-6.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+      </section>
+
+      <svg class="wave wave--to-sand" viewBox="0 0 1200 60" preserveAspectRatio="none" aria-hidden="true"><path d="M0 30 C 150 5 300 55 450 30 S 750 5 900 28 S 1100 52 1200 26 V60 H0Z"/></svg>
+
+      <!-- 2. Полароиды -->
+      <section class="section section--sand" id="photos">
+        <header class="section__head" data-reveal>
+          <p class="kicker" data-t="photos.kicker"></p>
+          <h2 class="section__title" data-t="photos.title"></h2>
+          <p class="section__lead" data-t="photos.lead"></p>
+        </header>
+        <div class="polaroids" data-reveal></div>
+      </section>
+
+      <svg class="wave wave--to-deep" viewBox="0 0 1200 60" preserveAspectRatio="none" aria-hidden="true"><path d="M0 34 C 200 8 380 52 600 30 S 1000 6 1200 32 V60 H0Z"/></svg>
+
+      <!-- 3. Мини-игра -->
+      <section class="section section--deep" id="game">
+        <header class="section__head" data-reveal>
+          <p class="kicker" data-t="game.kicker"></p>
+          <h2 class="section__title" data-t="game.title"></h2>
+          <p class="section__lead" data-t="game.lead"></p>
+        </header>
+        <div class="game" data-reveal></div>
+      </section>
+
+      <svg class="wave wave--to-sand" viewBox="0 0 1200 60" preserveAspectRatio="none" aria-hidden="true"><path d="M0 28 C 180 50 360 6 560 30 S 940 54 1200 24 V60 H0Z"/></svg>
+
+      <!-- 4. Карта планов -->
+      <section class="section section--sand" id="map">
+        <header class="section__head" data-reveal>
+          <p class="kicker" data-t="map.kicker"></p>
+          <h2 class="section__title" data-t="map.title"></h2>
+          <p class="section__lead" data-t="map.lead"></p>
+        </header>
+        <div class="map" data-reveal></div>
+      </section>
+
+      <svg class="wave wave--to-dusk" viewBox="0 0 1200 60" preserveAspectRatio="none" aria-hidden="true"><path d="M0 32 C 220 6 420 54 640 28 S 1020 8 1200 34 V60 H0Z"/></svg>
+
+      <!-- 5. Её мнение -->
+      <section class="section section--dusk" id="quiz">
+        <header class="section__head" data-reveal>
+          <p class="kicker" data-t="quiz.kicker"></p>
+          <h2 class="section__title" data-t="quiz.title"></h2>
+          <p class="section__lead" data-t="quiz.lead"></p>
+        </header>
+        <div class="quiz" data-reveal></div>
+      </section>
+
+      <svg class="wave wave--to-paper" viewBox="0 0 1200 60" preserveAspectRatio="none" aria-hidden="true"><path d="M0 26 C 160 52 400 4 620 30 S 980 50 1200 22 V60 H0Z"/></svg>
+
+      <!-- 6. Письмо и пасхалка -->
+      <section class="section section--paper" id="letter">
+        <header class="section__head" data-reveal>
+          <p class="kicker" data-t="letter.kicker"></p>
+          <h2 class="section__title" data-t="letter.title"></h2>
+        </header>
+        <div class="letter" data-reveal></div>
+      </section>
+    </main>
+
+    <footer class="footer"><p data-t="footer.text"></p></footer>
+
+  </body>
+</html>

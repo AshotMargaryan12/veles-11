@@ -1,0 +1,35 @@
+# Telegram session files — NEVER commit
+*.session
+*.session-journal
+sessions/
+
+# Secrets
+.env
+.env.local
+credentials.json
+service_account.json
+
+# Data
+*.db
+*.sqlite
+*.sqlite3
+exports/*
+!exports/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
