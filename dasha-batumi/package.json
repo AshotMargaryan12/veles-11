@@ -1,0 +1,20 @@
+{
+  "name": "dasha-batumi",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Сайт-сюрприз для Дашулечки: до встречи в Батуми",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview --host",
+    "captions": "node scripts/captions.mjs",
+    "deploy:vercel": "vercel --prod",
+    "deploy:gh": "vite build && gh-pages -d dist --nojekyll"
+  },
+  "devDependencies": {
+    "gh-pages": "^6.3.0",
+    "sharp": "^0.35.5",
+    "vite": "^8.3.4"
+  }
+}

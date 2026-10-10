@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.vercel/
+
+# Ключи — никогда не в git
+.env
+.env.*
+!.env.example
+
+# Личные фото не коммитим: репозиторий публичный.
+# Подписи (captions.json) можно хранить в git.
+photos/*
+!photos/captions.json
+!photos/.gitkeep
