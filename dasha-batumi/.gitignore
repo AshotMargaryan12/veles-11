@@ -7,8 +7,8 @@ dist/
 .env.*
 !.env.example
 
-# Личные фото не коммитим: репозиторий публичный.
-# Подписи (captions.json) можно хранить в git.
-photos/*
-!photos/captions.json
-!photos/.gitkeep
+# Фото коммитятся. Перед коммитом: npm run photos:clean
+# (убирает геолокацию и прочий EXIF, уменьшает до 2048px).
+# HEIC не поддерживается — сохраняй как JPG.
+photos/*.heic
+photos/*.HEIC
