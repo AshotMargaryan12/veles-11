@@ -12,7 +12,7 @@ function htmlMeta(env) {
     transformIndexHtml(html) {
       const site = (env.VITE_SITE_URL || '').replace(/\/+$/, '');
       const ogImage = site
-        ? `<meta property="og:image" content="${escapeHtml(site)}/og.png" />\n    <meta property="og:url" content="${escapeHtml(site)}/" />`
+        ? `<meta property="og:image" content="${escapeHtml(site)}/og.jpg" />\n    <meta property="og:url" content="${escapeHtml(site)}/" />`
         : '';
       return html
         .replaceAll('%META_TITLE%', escapeHtml(meta.title))

@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview --host",
     "captions": "node scripts/captions.mjs",
-    "deploy:vercel": "vercel --prod",
+    "deploy:vercel": "vite build && npx --yes vercel --prod",
     "deploy:gh": "vite build && gh-pages -d dist --nojekyll"
   },
   "devDependencies": {

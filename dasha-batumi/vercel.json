@@ -1,0 +1,7 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "echo 'Зависимости не нужны: сайт собран локально командой npm run deploy:vercel'",
+  "buildCommand": "echo 'Сайт уже собран локально в dist/'",
+  "outputDirectory": "dist"
+}

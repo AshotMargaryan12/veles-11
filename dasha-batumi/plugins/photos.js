@@ -139,12 +139,18 @@ export default function photosPlugin({ dir = 'photos' } = {}) {
 
       // Добавил или удалил фото — пересобираем список и перезагружаем страницу
       server.watcher.add(photosDir);
-      const onChange = async (file) => {
+      let timer;
+      const onChange = (file) => {
         if (!file.startsWith(photosDir) || !IMAGE_RE.test(file)) return;
-        await refresh();
-        const mod = server.moduleGraph.getModuleById(RESOLVED_ID);
-        if (mod) server.moduleGraph.invalidateModule(mod);
-        server.ws.send({ type: 'full-reload' });
+        // копирование большого файла даёт несколько событий подряд — ждём, пока утихнут
+        clearTimeout(timer);
+        timer = setTimeout(async () => {
+          await (pending || Promise.resolve());
+          await refresh();
+          const mod = server.moduleGraph.getModuleById(RESOLVED_ID);
+          if (mod) server.moduleGraph.invalidateModule(mod);
+          server.ws.send({ type: 'full-reload' });
+        }, 400);
       };
       server.watcher.on('add', onChange);
       server.watcher.on('unlink', onChange);

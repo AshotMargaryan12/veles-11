@@ -1,3 +1,10 @@
+# На Vercel уходит только собранный сайт из dist/ (фото там уже сжаты,
+# ключи из .env уже вшиты). Оригиналы фото и ключи не загружаем.
 node_modules
-dist
-.env.example
+photos
+.env
+.env.*
+src
+plugins
+scripts
+public
